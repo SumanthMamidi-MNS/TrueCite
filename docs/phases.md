@@ -2,7 +2,7 @@
 
 Sequential, gated phases per PRD §9 — no fixed schedule. Each phase gates the next.
 
-## Phase 1 — Corpus & Chunking — IN PROGRESS, awaiting user review
+## Phase 1 — Corpus & Chunking — DONE
 - [x] Corpus sourced: 5 real documents (Patents Act 1970, IPO TK/Biological Material
       Guidelines 2012, IPO AYUSH Examination Guidelines 2025, WIPO TK toolkit, PIB FAQ
       release). Provenance/authority tagged in `corpus/manifest.md`.
@@ -13,12 +13,11 @@ Sequential, gated phases per PRD §9 — no fixed schedule. Each phase gates the
       table of contents get chunked as if it were body text.
 - [x] Section 3(p) of the Patents Act (TK non-patentability — core to this project) verified
       intact in its own chunk.
-- [ ] Known gap: AYUSH-2025 and WIPO-toolkit docs use decimal ("3.1") and named ("Guiding
-      Principle N") sub-headings the chunker doesn't split on yet, so their main sections
-      land in one large (~16-23k char) chunk. Both are lower-priority/authority sources
-      (guideline/informational tier, not the core Act) — deferred pending user direction:
-      fix now, or move to Phase 2 and revisit if retrieval quality actually suffers.
-- [ ] User review/approval of chunk output (gate: no broken cross-references) — pending.
+- [x] Fixed: oversized sections with no numeric subsections (AYUSH-2025's decimal "3.1"
+      headings, WIPO toolkit's named headings) now fall back to paragraph-grouping instead
+      of shipping as one large chunk. All 5 docs: 288 chunks total, 0 duplicates, 0 empty,
+      0 stray noise fragments.
+- [x] User review/approval of chunk output — approved 2026-09-12.
 
 ## Phase 2 — Basic Retrieval — not started
 Embeddings + ChromaDB indexing, vector-only retrieval.
