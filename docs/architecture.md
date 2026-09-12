@@ -8,6 +8,7 @@
 
 ## Folder structure
 ```
+docs/             # PRD.md, architecture.md, phases.md, decisions.md, memory.md
 corpus/
   raw/            # source PDFs/text, as downloaded — untouched
   processed/      # chunked output, one JSON array of chunks per doc_id
