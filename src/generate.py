@@ -46,9 +46,11 @@ REFUSAL_MESSAGE = (
 
 GENERATION_PROMPT_TEMPLATE = """You are an assistant answering a question about Indian Ayurveda IP/regulatory law, using ONLY the source passages given below. Do not use outside knowledge. Every factual claim you make must be directly supported by one of these passages.
 
+For each claim, first find the passage that is MOST SPECIFICALLY and DIRECTLY on point for the question — a passage that discusses the exact topic asked about beats a passage that is merely more general or from a higher-authority document but doesn't address the specific point. Only when two or more passages are EQUALLY specific and directly on point should you prefer the one earlier in the list below (they are pre-sorted by authority for exactly that tie-breaking case, not as a general preference).
+
 Question: {query}
 
-Source passages, each numbered (in priority order — prefer the more authoritative source when they cover the same point):
+Source passages, numbered, pre-sorted by authority for tie-breaking only:
 {passages_block}
 
 Respond with ONLY a JSON object in this exact format, no other text:
