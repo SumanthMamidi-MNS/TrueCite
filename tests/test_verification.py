@@ -60,3 +60,47 @@ def test_raises_when_supported_field_is_not_a_bool():
     )):
         with pytest.raises(ValueError):
             verify_claim("some claim", "some passage")
+
+
+def test_majority_vote_resolves_a_split_decision():
+    # Directly reproduces what was observed live against the real model: 2
+    # "supported" votes and 1 "not supported" vote on a claim that was
+    # genuinely well-supported — majority must win, not the last call.
+    responses = [
+        _mock_response('{"reasoning": "clearly stated", "supported": true}'),
+        _mock_response('{"reasoning": "clearly stated", "supported": true}'),
+        _mock_response('{"reasoning": "missed the connection", "supported": false}'),
+    ]
+    with patch("verification.requests.post", side_effect=responses):
+        result = verify_claim("some claim", "some passage", votes=3)
+    assert result["supported"] is True
+    assert result["votes"] == [True, True, False]
+
+
+def test_majority_vote_reasoning_comes_from_an_agreeing_call():
+    responses = [
+        _mock_response('{"reasoning": "reason A", "supported": true}'),
+        _mock_response('{"reasoning": "reason B", "supported": true}'),
+        _mock_response('{"reasoning": "reason C", "supported": false}'),
+    ]
+    with patch("verification.requests.post", side_effect=responses):
+        result = verify_claim("some claim", "some passage", votes=3)
+    assert result["reasoning"] in ("reason A", "reason B")
+
+
+def test_majority_vote_tolerates_one_failed_call():
+    responses = [
+        _mock_response('{"reasoning": "ok", "supported": true}'),
+        _mock_response("not json at all"),  # this vote fails to parse
+        _mock_response('{"reasoning": "ok", "supported": true}'),
+    ]
+    with patch("verification.requests.post", side_effect=responses):
+        result = verify_claim("some claim", "some passage", votes=3)
+    assert result["supported"] is True
+
+
+def test_raises_when_every_vote_fails():
+    responses = [_mock_response("not json") for _ in range(3)]
+    with patch("verification.requests.post", side_effect=responses):
+        with pytest.raises(ValueError):
+            verify_claim("some claim", "some passage", votes=3)

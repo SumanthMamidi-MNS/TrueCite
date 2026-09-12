@@ -73,8 +73,37 @@ Sequential, gated phases per PRD §9 — no fixed schedule. Each phase gates the
       "as prescribed" — passes Layer 1's distance gate at 0.82, correctly rejected by Layer
       2) and a claim that actively contradicts its passage.
 
-## Phase 5 — Authority & Citation — not started
-Layer 3 (date/authority tagging), citation-formatted generation.
+## Phase 5 — Authority & Citation — DONE
+- [x] `src/authority.py` extended with a short citation name per doc_id; `src/citation.py`
+      adds `format_citation` (PRD §6.4 format: `[Source: <name>, §<section>, effective
+      <date>]`) and `resolve_authority` (Act > IPO Guideline > Informational, recency
+      within a level) — both unit-tested (`tests/test_citation.py`).
+- [x] `src/generate.py`: full pipeline — retrieve (vector for Layer 1's threshold check,
+      hybrid for ranking) -> Layer 1 gate -> authority-ordered candidates -> generation as
+      discrete claims each tied to one chunk_id (not free prose, so Layer 2 can verify each
+      independently) -> Layer 2 verification -> final answer built only from surviving,
+      cited claims.
+- [x] Found and fixed a real bug while testing end-to-end (not assumed correct): authority
+      sort was applied to the whole candidate pool before truncating to top_k, letting
+      lower-relevance/higher-authority chunks evict the actually-relevant one. Fixed to sort
+      by relevance first, authority only within the selected set. Regression-tested.
+- [x] Gate (`src/run_phase5.py`, 3 hand-checked end-to-end cases):
+      1. Answerable query -> correct, cited answer (verified against the exact known-correct
+         statistic from Phase 2/3 testing).
+      2. Genuinely unanswerable query -> Layer 1 refuses before any LLM call.
+      3. The "topically relevant but not specific" fee-amount case (Layer 1 alone passes it,
+         0.82 distance) -> full pipeline correctly refuses. Generation itself declined to
+         fabricate a figure (returned zero claims); separately verified Layer 2 also
+         correctly rejects a fabricated fee claim when one is constructed directly.
+- [x] Discovered and fixed a real Layer 2 reliability issue: the local 7B model gave
+      inconsistent verdicts across repeated calls on the same (claim, passage) pair.
+      Reordered the verification schema (reasoning before verdict) and added majority-vote
+      verification (3 calls) — see `docs/decisions.md` for the evidence.
+- [ ] Not yet exercised: a genuine two-version conflicting-rule case for Layer 3's "surface
+      the current version" requirement — the corpus doesn't have one (2012 and 2025
+      guidelines complement, not conflict; see `docs/eval_questions.md` category D). The
+      ranking logic itself (`resolve_authority`) is tested with synthetic data since there's
+      no real corpus example to validate against.
 
 ## Phase 6 — Evaluation — not started
 20-30 question eval set; citation accuracy, refusal rate, false-refusal rate.

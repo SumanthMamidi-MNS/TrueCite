@@ -37,3 +37,9 @@ def test_every_entry_has_an_effective_date_and_note():
     for doc_id, meta in DOC_AUTHORITY.items():
         assert meta["effective_date"], doc_id
         assert meta["date_note"], f"{doc_id} should document where its date came from"
+
+
+def test_every_entry_has_a_short_citation_name():
+    for doc_id, meta in DOC_AUTHORITY.items():
+        assert meta["short_name"], doc_id
+        assert len(meta["short_name"]) < 60, f"{doc_id}'s short_name should actually be short"

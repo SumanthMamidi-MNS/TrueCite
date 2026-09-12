@@ -30,6 +30,7 @@ _RANK = {
 # src/run_phase1.py's ALL_DOCS), not the manifest.md "File" column's path.
 DOC_AUTHORITY: dict[str, dict] = {
     "patents_act_1970": {
+        "short_name": "Patents Act, 1970",
         "title": "The Patents Act, 1970 (No. 39 of 1970), incorporating all amendments",
         "authority_level": AUTH_LEVEL_ACT,
         "effective_date": "2024-08-01",
@@ -38,6 +39,7 @@ DOC_AUTHORITY: dict[str, dict] = {
         "source_url": "https://ipindia.gov.in/frontend/pdf/patents/1_113_1_The_Patents_Act__1970___incorporating_all_amendments_till_1-08-2024.pdf",
     },
     "ipo_tk_biological_material_guidelines_2012": {
+        "short_name": "IPO TK & Biological Material Guidelines (2012)",
         "title": "Guidelines for Processing of Patent Applications relating to Traditional Knowledge and Biological Material",
         "authority_level": AUTH_LEVEL_IPO_GUIDELINE,
         "effective_date": "2012-11-08",
@@ -46,6 +48,7 @@ DOC_AUTHORITY: dict[str, dict] = {
         "source_url": "https://ipindia.gov.in/storage/uploads/docs-operator/220f0e1c-1301-4f0f-84a0-6709fa66c592.pdf",
     },
     "ipo_ayush_examination_guidelines_2025": {
+        "short_name": "IPO AYUSH Examination Guidelines (2025)",
         "title": "Guidelines for Examination of AYUSH-Related Inventions",
         "authority_level": AUTH_LEVEL_IPO_GUIDELINE,
         "effective_date": "2025-09-23",
@@ -54,6 +57,7 @@ DOC_AUTHORITY: dict[str, dict] = {
         "source_url": "https://ipindia.gov.in/storage/uploads/docs-operator/335e2746-58c1-4b56-a1e5-cdd172a92a3c.pdf",
     },
     "wipo_documenting_tk_toolkit": {
+        "short_name": "WIPO TK Documentation Toolkit",
         "title": "Documenting Traditional Knowledge and Traditional Cultural Expressions — A Toolkit",
         "authority_level": AUTH_LEVEL_INFORMATIONAL,
         "effective_date": "2017-01-01",
@@ -62,6 +66,7 @@ DOC_AUTHORITY: dict[str, dict] = {
         "source_url": "https://www.wipo.int/edocs/pubdocs/en/wipo_pub_1049.pdf",
     },
     "pib_faq_patents_traditional_ayurvedic_medicine_2013": {
+        "short_name": "PIB Press Release (2013)",
         "title": "\"Patents to Traditional Ayurvedic Medicine\" — Press Information Bureau release",
         "authority_level": AUTH_LEVEL_INFORMATIONAL,
         "effective_date": "2013-08-12",
