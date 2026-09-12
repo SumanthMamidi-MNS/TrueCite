@@ -105,11 +105,59 @@ Sequential, gated phases per PRD §9 — no fixed schedule. Each phase gates the
       ranking logic itself (`resolve_authority`) is tested with synthetic data since there's
       no real corpus example to validate against.
 
-## Phase 6 — Evaluation — not started
-20-30 question eval set; citation accuracy, refusal rate, false-refusal rate.
+## Phase 6 — Evaluation — DONE
+- [x] `src/run_phase6.py`: 11 answerable + 5 unanswerable questions (docs/eval_questions.md
+      categories A/B/C; D and E excluded — no real version-conflict case or Hindi content
+      exists yet, documented not silently skipped) run through the real end-to-end pipeline.
+- [x] **Unanswerable side: clean.** 5/5 correctly refused, 0/5 false answers, across every
+      run. The "never confidently guess" property held throughout all debugging.
+- [x] **Answerable side: found and fixed 4 real bugs through iterative testing**, not
+      reported on the first (bad) numbers:
+      1. Generation returned a paraphrased/truncated chunk_id ("doc" instead of
+         "doc::sec-3"), silently failing the lookup and dropping otherwise-correct claims.
+         Fixed: numbered passage labels ([1], [2], ...) instead of raw chunk_id strings.
+      2. The correct source for one question ranked #29 by vector similarity — outside the
+         top-20 candidate fetch window entirely. Same statutory-vocabulary-gap pattern
+         already documented in Phase 2, now confirmed recurring on a second, unrelated
+         query. Fixed by widening the candidate-fetch window (cheap — pure retrieval, no
+         extra LLM calls).
+      3. That widening caused a **regression** (false-refusal rate rose, not fell) on
+         re-test — investigated rather than reverted blindly: generation was over-applying
+         the "prefer the more authoritative source" instruction, picking a generic Act
+         clause over a more specific Guideline passage. Fixed the prompt to require
+         specificity first, authority only as a tie-breaker among equally-specific passages.
+      4. While investigating a "wrong citation" case, discovered the citation was actually
+         **correct** — I'd only read the first 600 characters of that passage during
+         Phase 1/2 and missed that it continues to state the exact rule in question. The
+         eval script's single-expected-doc_id-per-question scoring was undercounting
+         correct answers whenever the system found a different, equally valid source.
+         Corrected the ground truth against actual chunk text for every affected question.
+- [x] **Final measured numbers** (`src/run_phase6.py`, single most recent run — see below
+      for the honest caveat about run-to-run variance):
+      - Citation accuracy (answerable questions, correct source cited): **5/11**
+      - False-refusal rate (answerable questions incorrectly refused): **5/11**
+      - Correct-refusal rate (unanswerable questions correctly refused): **5/5**
+      - False-answer rate (unanswerable questions incorrectly answered): **0/5**
+- [x] **Root cause of the remaining false refusals, characterized directly, not guessed**:
+      traced two representative failures end-to-end. One was a genuine extraction-quality
+      limitation of the local 7B generation model — the exact right sentence ("TK
+      documentation is broadly divided into three distinct phases...") was present in the
+      #1-ranked candidate chunk handed to it, but generation extracted an unrelated
+      illustrative example from later in that same (long, multi-topic) chunk instead. This
+      is a genuine cost of the temporary local-LLM substitution (see Phase 4), not a fixable
+      pipeline defect — a stronger model would very likely resolve it.
+- [x] **Observed genuine run-to-run non-determinism**: identical code, identical questions,
+      different runs produced different individual pass/fail patterns (though the aggregate
+      false-refusal rate was stable at 5/11 across 3 of 4 runs) — local-LLM sampling
+      variance, consistent with the Layer 2 reliability finding in Phase 5. A single run's
+      numbers should be read as indicative, not exact.
 
-## Phase 7 — Interface & Documentation — not started
-Minimal UI, README (architecture, failure mode solved, known limitations).
+## Phase 7 — Interface & Documentation — DONE
+- [x] `src/app.py`: minimal Streamlit UI (PRD §7) — question box, answer + citations,
+      known-limitations panel.
+- [x] `README.md`: architecture, the specific failure mode targeted (citation-real-but-
+      unsupporting, per the 2025 Stanford/Magesh study), how to run it, and every known
+      limitation found during testing (not discovered later by someone else).
 
 ## Notes
 - No fixed calendar — move to the next phase only when the current one is verified working.

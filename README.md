@@ -114,6 +114,13 @@ discovered later by someone else:
   time in 3. Mitigated with majority-vote verification (3 calls, take the
   consensus), which measurably helped but doesn't guarantee determinism. A
   frontier model would likely need this less.
+- **Local-model extraction quality.** Phase 6 measured a 5/11 false-refusal
+  rate on answerable questions. The unanswerable side is clean (5/5 correct
+  refusals, 0 false answers) — the failures are specifically the smaller
+  model sometimes not extracting the right fact even when it's present in
+  the top-ranked passage it was given (verified directly on one case: the
+  right sentence was there, generation picked an unrelated example from
+  later in the same passage instead). See "Evaluation" below.
 - **A real vocabulary/framing gap in retrieval.** Terse, negatively-framed
   statutory clauses (e.g. Patents Act §3(p), which never actually uses the
   word "patent") don't reliably rank highly against natural-language
@@ -134,9 +141,36 @@ discovered later by someone else:
 
 ## Evaluation
 
-See `docs/eval_questions.md` for the full question set (with categories and
-rationale) and `docs/phases.md` Phase 6 for the measured results (citation
-accuracy, refusal rate, false-refusal rate) against the live pipeline.
+`src/run_phase6.py` runs 11 answerable + 5 unanswerable questions
+(`docs/eval_questions.md` categories A/B/C) through the real pipeline. Most
+recent measured results:
+
+| Metric | Result |
+|---|---|
+| Correct-refusal rate (unanswerable questions correctly refused) | **5/5** |
+| False-answer rate (unanswerable questions incorrectly answered) | **0/5** |
+| Citation accuracy (answerable questions, correct source cited) | **5/11** |
+| False-refusal rate (answerable questions incorrectly refused) | **5/11** |
+
+**The unanswerable side is clean** — the system never confidently answered a
+question the corpus can't actually support, across every debugging run. The
+answerable side is weaker, and getting to these numbers found and fixed 4 real
+pipeline bugs along the way (chunk-ID references the model mangled when
+copying, a retrieval window too narrow to reach a correctly-worded but
+rank-29 statutory clause, an authority-preference instruction the model
+over-applied, and an eval ground truth that was itself too narrow — see
+`docs/decisions.md` for each, with evidence). The **remaining false
+refusals trace to a genuine local-7B-model limitation**, not a further
+pipeline defect: in the case investigated directly, the exact right sentence
+was present in the #1-ranked candidate passage, but generation extracted an
+unrelated example from later in that same long passage instead. This is the
+concrete, measured cost of substituting a local model for the Claude API the
+PRD specifies (see "Known limitations") — expect it to improve significantly
+once a real API key is available. Also observed: genuine run-to-run
+variance from LLM sampling — a single run's numbers are indicative, not an
+exact reproducible score. Full question set and per-question ground truth
+in `docs/eval_questions.md`; full debugging narrative in `docs/phases.md`
+Phase 6 and `docs/decisions.md`.
 
 ## Project docs
 

@@ -38,7 +38,7 @@ requirements.txt
 .venv/            # local virtualenv, not committed
 ```
 
-## Data flow (current, through Phase 5)
+## Data flow (all 7 PRD phases now built — see docs/phases.md for gate results)
 1. `parsing.extract_pages` reads a PDF (via `pypdf`) or `.txt` file and returns one text string per page.
 2. `chunking.chunk_document` joins page texts (tracking each page's character offset, for citation page numbers), cleans page-footer noise (amendment footnotes, bare page numbers, amendment-insertion brackets), then chunks structurally, trying each strategy in order:
    - Detect numbered sections/paragraphs at line start; filter out footnote-content false-positives; keep only a strictly-increasing numeric sequence (handles page footnotes that restart their own numbering, and mid-sentence lettered cross-references that would otherwise look like a new clause).
@@ -57,7 +57,9 @@ requirements.txt
    f. Surviving claims are formatted with `citation.format_citation` (`[Source: <short name>, §<section>, effective <date>]`) and joined into the final answer. If every claim was dropped, refuse.
 7. `authority.py` / `citation.py` hold the authority-level/effective-date metadata and the ranking/formatting logic Layer 3 needs.
 
-Not yet built/exercised: a genuine two-version conflicting-rule case to validate "surface the current version" against real corpus content (none exists in this corpus — see `docs/phases.md` Phase 5); Phase 6 formal evaluation; Phase 7 UI.
+Not yet exercised: a genuine two-version conflicting-rule case to validate "surface the current version" against real corpus content (none exists in this corpus — see `docs/phases.md` Phase 5).
+
+`src/app.py` (Streamlit) is the minimal UI (Phase 7), a thin wrapper over `generate.answer_query`.
 
 ## Known limitations (see docs/decisions.md for full evidence)
 - **Retrieval vocabulary gap**: terse, negatively-framed statutory clauses (e.g. Patents Act §3(p), which never uses the word "patent") don't reliably rank highly against natural-language questions ("can X be patented?"), in neither vector nor BM25 nor hybrid. The system still returns substantively correct, citable answers from secondary sources discussing the same rule in fuller prose.
