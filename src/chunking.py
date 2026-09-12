@@ -12,9 +12,13 @@ prose all appear in the same corpus):
   1. Chapter headings ("CHAPTER I" + title line), if present.
   2. Numbered sections/paragraphs ("N. ..." or "N. Title.<dash>...") at line start,
      within each chapter (or the whole document if no chapters).
-  3. If a section's body is long, split further at numbered sub-clauses
+  3. If a section enumerates several lettered clauses ("(a)", "(b)", ...) and
+     has no numeric subsections of its own, split per clause regardless of
+     total length — long lettered lists dilute embedding relevance for any
+     one clause even when the whole section is under the size cap.
+  4. Else, if a section's body is long, split further at numbered sub-clauses
      ("(1)", "(2)", ...) at line start, keeping the parent section number attached.
-  4. If no numbering is detected at all, fall back to paragraph grouping
+  5. If no numbering is detected at all, fall back to paragraph grouping
      (blank-line-delimited), merged up to a target size — still never mid-sentence.
 """
 import re
@@ -23,6 +27,12 @@ from dataclasses import dataclass, field
 
 SECTION_RE = re.compile(r"^[ \t]*(\d{1,4}[A-Z]{0,2})\.\s+(.*)$", re.MULTILINE)
 SUBSECTION_RE = re.compile(r"^[ \t]*\((\d{1,3}[A-Za-z]?)\)\s+", re.MULTILINE)
+LETTERED_CLAUSE_RE = re.compile(r"^[ \t]*\(([a-z]{1,3})\)\s+", re.MULTILINE)
+# Subsection "(1)" is almost always inline right after the heading's own
+# dash ("19. Powers...—(1) If..."), not at line start, so SUBSECTION_RE alone
+# undercounts by one for most sections — used to correct that count before
+# deciding whether a section already has its own numeric subsection structure.
+_INLINE_FIRST_SUBSECTION_RE = re.compile(r"[—–]\s*\(1\)\s")
 
 # Bare Acts print amendment footnotes ("3. Ins. by Act 15 of 2005, s. 2
 # (w.e.f. 1-1-2005)") inline in the extracted text, numbered independently of
@@ -41,6 +51,17 @@ FOOTNOTE_CONTENT_RE = re.compile(
 MIN_SECTION_BODY_CHARS = 20
 MAX_CHUNK_CHARS = 3000
 PARAGRAPH_TARGET_CHARS = 1200
+
+# A section enumerating this many distinct lettered clauses — e.g. the Patents
+# Act's Section 3, "(a) ... (b) ... ... (p) an invention which, in effect, is
+# traditional knowledge" — gets split per clause regardless of its total
+# character count. The problem this fixes isn't length, it's semantic
+# dilution: embedding one chunk covering 16 unrelated statutory exclusions
+# pulls each individual clause's meaning toward the group average, measurably
+# hurting retrieval for a specific clause (verified: isolating Section 3(p)
+# alone raised its cosine similarity to a plain-language TK-patentability
+# query from 0.455 to 0.568 — see docs/decisions.md).
+MIN_LETTERED_CLAUSES_TO_SPLIT = 3
 
 
 @dataclass
@@ -170,6 +191,56 @@ def _fallback_paragraph_chunks(
     return chunks
 
 
+def _split_by_lettered_clauses(
+    doc_id: str,
+    section_number: str,
+    heading: str,
+    body: str,
+    body_start_offset: int,
+    offsets: list[int],
+) -> list[Chunk]:
+    """Split a section into one chunk per lettered clause "(a)", "(b)", ...
+
+    Only called when the section has no numeric "(1)"/"(2)" subsections of its
+    own (checked by the caller) — avoids misreading letters nested a level
+    below an existing numeric subsection (e.g. Section 25's "(1) ... (a) ...
+    (2) ... (a) ..." would otherwise produce two colliding "clause-a" chunks).
+
+    Each clause is prefixed with the section's own intro text (everything
+    before the first clause) so a clause read alone — e.g. just "(p) an
+    invention which, in effect, is traditional knowledge..." — keeps the
+    "the following are not inventions" framing instead of losing it, the same
+    class of bug as the earlier lost-preamble fix.
+    """
+    matches = _monotonic_lettered_clauses(body)
+    intro = body[: matches[0].start()].strip()
+
+    chunks = []
+    for i, m in enumerate(matches):
+        letter = m.group(1)
+        start = m.start()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(body)
+        clause_text = body[start:end].strip()
+        if not clause_text:
+            continue
+        full_text = f"{intro}\n{clause_text}" if intro else clause_text
+        abs_start = body_start_offset + start
+        abs_end = body_start_offset + end
+        chunks.append(
+            Chunk(
+                doc_id=doc_id,
+                chunk_id=f"{doc_id}::sec-{section_number}-clause-{letter}",
+                heading=heading,
+                section_number=f"{section_number}({letter})",
+                parent_section_number=section_number,
+                page_start=_page_for_offset(offsets, abs_start),
+                page_end=_page_for_offset(offsets, abs_end),
+                text=full_text,
+            )
+        )
+    return chunks
+
+
 def _split_section_body(
     doc_id: str,
     section_number: str,
@@ -180,7 +251,9 @@ def _split_section_body(
 ) -> list[Chunk]:
     """Split an overlong section into sub-clause chunks, tagged with the parent section."""
     matches = list(SUBSECTION_RE.finditer(body))
-    if len(matches) < 2:
+    has_inline_subsection_1 = bool(_INLINE_FIRST_SUBSECTION_RE.search(body[:300]))
+    effective_match_count = len(matches) + (1 if has_inline_subsection_1 else 0)
+    if effective_match_count < 2:
         # No numeric "(1)", "(2)" subsections to split on (some documents use
         # decimal headings like "3.1" or named ones like "Guiding Principle 2"
         # instead, which this chunker doesn't parse as structure). Rather than
@@ -219,6 +292,29 @@ def _split_section_body(
         return chunks
 
     chunks = []
+    # Subsection "(1)" is almost always inline with the section heading itself
+    # ("19. Powers of Controller...—(1) If, in consequence...") rather than on
+    # its own line, so SUBSECTION_RE's line-start match never finds it — the
+    # first real match here is usually "(2)". Left alone, subsection (1)'s
+    # entire text (everything before that first match) would be silently
+    # dropped, the same class of bug as the earlier lost-preamble fix.
+    leading_text = body[: matches[0].start()].strip()
+    if len(leading_text) >= MIN_SECTION_BODY_CHARS:
+        abs_start = body_start_offset
+        abs_end = body_start_offset + matches[0].start()
+        chunks.append(
+            Chunk(
+                doc_id=doc_id,
+                chunk_id=f"{doc_id}::sec-{section_number}-sub-1",
+                heading=heading,
+                section_number=f"{section_number}(1)",
+                parent_section_number=section_number,
+                page_start=_page_for_offset(offsets, abs_start),
+                page_end=_page_for_offset(offsets, abs_end),
+                text=leading_text,
+            )
+        )
+
     for i, m in enumerate(matches):
         sub_num = m.group(1)
         start = m.start()
@@ -264,6 +360,28 @@ def _filter_monotonic(matches: list[re.Match]) -> list[re.Match]:
         if key > last_key:
             accepted.append(m)
             last_key = key
+    return accepted
+
+
+def _monotonic_lettered_clauses(body: str) -> list[re.Match]:
+    """LETTERED_CLAUSE_RE matches that continue a strictly increasing letter
+    sequence (plain string comparison — correctly orders amendment-inserted
+    letters too, e.g. "aa" < "ab" < "b").
+
+    Unlike numbered sections, a lettered marker like "(b)" is short enough
+    that it can coincidentally start a PDF-wrapped line mid-sentence (e.g. "...
+    described in clause (b) of this section, the applicant shall...") without
+    being a real new list item. Rejecting anything that doesn't continue the
+    sequence — the same defense used against footnote-number collisions in
+    _filter_monotonic — catches this False start.
+    """
+    accepted = []
+    last_letter = ""
+    for m in LETTERED_CLAUSE_RE.finditer(body):
+        letter = m.group(1)
+        if letter > last_letter:
+            accepted.append(m)
+            last_letter = letter
     return accepted
 
 
@@ -315,7 +433,17 @@ def _chunk_region(
             heading = f"Paragraph {section_number}"
 
         abs_body_start = region_start_offset + body_start
-        if len(body) > MAX_CHUNK_CHARS:
+        lettered_clause_count = len(_monotonic_lettered_clauses(body))
+        numeric_subsection_count = len(SUBSECTION_RE.findall(body))
+        if _INLINE_FIRST_SUBSECTION_RE.search(body[:300]):
+            numeric_subsection_count += 1
+        if lettered_clause_count >= MIN_LETTERED_CLAUSES_TO_SPLIT and numeric_subsection_count < 2:
+            chunks.extend(
+                _split_by_lettered_clauses(
+                    doc_id, section_number, heading, body, abs_body_start, offsets
+                )
+            )
+        elif len(body) > MAX_CHUNK_CHARS:
             chunks.extend(
                 _split_section_body(
                     doc_id, section_number, heading, body, abs_body_start, offsets

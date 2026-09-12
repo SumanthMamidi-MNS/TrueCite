@@ -33,9 +33,9 @@ class BM25Index:
                 "score": float(scores[i]),
                 "text": self.chunks[i]["text"],
                 "metadata": {
-                    "doc_id": self.chunks[i]["doc_id"],
-                    "heading": self.chunks[i]["heading"],
-                    "section_number": self.chunks[i]["section_number"],
+                    "doc_id": self.chunks[i].get("doc_id", ""),
+                    "heading": self.chunks[i].get("heading", ""),
+                    "section_number": self.chunks[i].get("section_number", ""),
                 },
             }
             for i in ranked
