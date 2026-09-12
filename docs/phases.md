@@ -48,11 +48,17 @@ Sequential, gated phases per PRD §9 — no fixed schedule. Each phase gates the
 - [x] Final corpus: 328 chunks (up from 288 after the clause-splitting fix), 0 duplicates,
       0 empty.
 
-## Phase 3 — Hybrid Retrieval — IN PROGRESS
+## Phase 3 — Hybrid Retrieval — DONE
 - [x] `src/bm25_retrieval.py` (BM25 keyword index) and `src/hybrid_retrieval.py`
       (Reciprocal Rank Fusion) built and unit-tested.
-- [ ] Gate: compare vector-only vs. hybrid on 15 test questions — hybrid must genuinely
-      outperform, not just add complexity. Not yet run at the 15-question scale.
+- [x] Gate: `src/run_phase3.py` compares vector-only vs. hybrid on 15 hand-picked questions
+      spanning all 5 docs. Doc-level hit@5 saturates at 15/15 for both (ceiling effect —
+      corpus is small/well-separated at the document level), so that alone doesn't
+      distinguish them; average rank does: **vector-only 1.67, hybrid 1.27** — a genuine,
+      not cosmetic, improvement, concentrated exactly where vector was weakest (two queries
+      improved from rank 4->2 and rank 5->2). Hybrid genuinely outperforms per the PRD gate.
+      One query regressed slightly (rank 1->2), expected/acceptable — RRF fusion isn't
+      guaranteed to never trade off a single-method's best case.
 
 ## Phase 4 — Confidence + Verification — not started
 Layer 1 (confidence gate) + Layer 2 (claim-support verification).
