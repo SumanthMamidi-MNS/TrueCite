@@ -37,7 +37,7 @@ from verification import verify_claim
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 GENERATION_MODEL = "qwen2.5:7b"
-CANDIDATE_K = 20
+CANDIDATE_K = 40
 
 REFUSAL_MESSAGE = (
     "I don't have enough grounded information in the corpus to answer this "
@@ -48,11 +48,11 @@ GENERATION_PROMPT_TEMPLATE = """You are an assistant answering a question about 
 
 Question: {query}
 
-Source passages (in priority order — prefer the more authoritative source when they cover the same point):
+Source passages, each numbered (in priority order — prefer the more authoritative source when they cover the same point):
 {passages_block}
 
 Respond with ONLY a JSON object in this exact format, no other text:
-{{"claims": [{{"text": "a single factual claim, in your own words but strictly grounded in one passage", "chunk_id": "the chunk_id of the ONE passage it's based on"}}]}}
+{{"claims": [{{"text": "a single factual claim, in your own words but strictly grounded in one passage", "source": <the passage NUMBER it's based on, e.g. 1>}}]}}
 
 If the passages don't actually answer the question, return {{"claims": []}}.
 """
@@ -90,7 +90,14 @@ def _select_grounded_hits(query: str, top_k: int) -> list[dict]:
 
 
 def _build_passages_block(hits: list[dict]) -> str:
-    return "\n".join(f"[{h['chunk_id']}]\n{h['text']}\n" for h in hits)
+    # Numbered labels instead of raw chunk_id strings: observed directly that
+    # the model would sometimes paraphrase/truncate a chunk_id like
+    # "doc::sec-3" down to just "doc" when copying it into its response,
+    # silently failing the lookup back to the source chunk and dropping an
+    # otherwise-correct, well-grounded claim (a real false-refusal cause, not
+    # hypothetical — see docs/decisions.md). A bare integer is far less prone
+    # to that kind of copy error.
+    return "\n".join(f"[{i}]\n{h['text']}\n" for i, h in enumerate(hits, start=1))
 
 
 def _generate_draft_claims(query: str, hits: list[dict]) -> list[dict]:
@@ -114,20 +121,20 @@ def _refusal() -> dict:
     return {"refused": True, "answer": REFUSAL_MESSAGE, "citations": [], "claims": []}
 
 
-def answer_query(query: str, top_k: int = 5) -> dict:
+def answer_query(query: str, top_k: int = 8) -> dict:
     """Returns {"refused": bool, "answer": str, "citations": list[str], "claims": list[dict]}."""
     hits = _select_grounded_hits(query, top_k)
     if not hits:
         return _refusal()
 
-    chunk_by_id = {h["chunk_id"]: h for h in hits}
     draft_claims = _generate_draft_claims(query, hits)
 
     verified_claims = []
     for claim in draft_claims:
-        chunk = chunk_by_id.get(claim.get("chunk_id"))
-        if chunk is None:
-            continue  # generation cited a chunk_id we didn't actually give it
+        source_num = claim.get("source")
+        if not isinstance(source_num, int) or not (1 <= source_num <= len(hits)):
+            continue  # generation cited a passage number we didn't actually give it
+        chunk = hits[source_num - 1]
         try:
             verdict = verify_claim(claim["text"], chunk["text"])
         except (ValueError, requests.RequestException):
@@ -136,6 +143,7 @@ def answer_query(query: str, top_k: int = 5) -> dict:
             verified_claims.append(
                 {
                     **claim,
+                    "chunk_id": chunk["chunk_id"],
                     "doc_id": chunk["metadata"]["doc_id"],
                     "section_number": chunk["metadata"].get("section_number"),
                 }
