@@ -67,7 +67,7 @@ _FOOTNOTE_LINE_RE = re.compile(
     r"Sub-?clause\s*\(|Clause\s*\([a-z]+\)|Sub-?section\s*\(|Received\sthe\sassent|\d{1,2}-\d{1,2}-\d{4}).*$",
     re.IGNORECASE | re.MULTILINE,
 )
-_PAGE_NUMBER_LINE_RE = re.compile(r"^\s*\d{1,4}\s*$", re.MULTILINE)
+_PAGE_NUMBER_LINE_RE = re.compile(r"^\s*(\d{1,4}|Page \d{1,4} of \d{1,4})\s*$", re.MULTILINE | re.IGNORECASE)
 _EXCESS_BLANK_LINES_RE = re.compile(r"\n{3,}")
 
 # Bare Acts mark amendment-inserted spans with a footnote-reference digit glued
@@ -111,35 +111,50 @@ def _page_for_offset(offsets: list[int], char_offset: int) -> int:
     return max(idx, 0) + 1
 
 
-def _split_into_paragraphs(text: str) -> list[str]:
-    raw = re.split(r"\n\s*\n", text)
-    return [p.strip() for p in raw if p.strip()]
+def _paragraph_spans(text: str) -> list[tuple[int, int]]:
+    """(start, end) of each non-blank paragraph in text, whitespace-trimmed.
+
+    Works on character spans rather than extracted/rejoined strings, so a
+    merged multi-paragraph block's offset is always exact — no fragile
+    re-searching for reconstructed text back in the original.
+    """
+    spans, pos = [], 0
+    boundaries = [m.start() for m in re.finditer(r"\n\s*\n", text)] + [len(text)]
+    for boundary in boundaries:
+        start, end = pos, boundary
+        while start < end and text[start].isspace():
+            start += 1
+        while end > start and text[end - 1].isspace():
+            end -= 1
+        if end > start:
+            spans.append((start, end))
+        pos = boundary
+    return spans
 
 
-def _merge_paragraphs(paragraphs: list[str], target_chars: int) -> list[str]:
-    merged, current = [], ""
-    for para in paragraphs:
-        if current and len(current) + len(para) > target_chars:
-            merged.append(current)
-            current = para
+def _merge_spans(spans: list[tuple[int, int]], target_chars: int) -> list[tuple[int, int]]:
+    merged: list[tuple[int, int]] = []
+    cur_start = cur_end = None
+    for start, end in spans:
+        if cur_start is None:
+            cur_start, cur_end = start, end
+        elif (cur_end - cur_start) + (end - start) > target_chars:
+            merged.append((cur_start, cur_end))
+            cur_start, cur_end = start, end
         else:
-            current = f"{current}\n\n{para}" if current else para
-    if current:
-        merged.append(current)
+            cur_end = end
+    if cur_start is not None:
+        merged.append((cur_start, cur_end))
     return merged
 
 
 def _fallback_paragraph_chunks(
     doc_id: str, text: str, offsets: list[int], base_offset: int, heading: str
 ) -> list[Chunk]:
-    paragraphs = _split_into_paragraphs(text)
-    merged = _merge_paragraphs(paragraphs, PARAGRAPH_TARGET_CHARS)
+    merged = _merge_spans(_paragraph_spans(text), PARAGRAPH_TARGET_CHARS)
     chunks = []
-    cursor = 0
-    for i, block in enumerate(merged, start=1):
-        start = base_offset + text.index(block, cursor)
-        cursor = text.index(block, cursor) + len(block)
-        end = start + len(block)
+    for i, (start, end) in enumerate(merged, start=1):
+        abs_start, abs_end = base_offset + start, base_offset + end
         chunks.append(
             Chunk(
                 doc_id=doc_id,
@@ -147,9 +162,9 @@ def _fallback_paragraph_chunks(
                 heading=heading,
                 section_number=None,
                 parent_section_number=None,
-                page_start=_page_for_offset(offsets, start),
-                page_end=_page_for_offset(offsets, end),
-                text=block,
+                page_start=_page_for_offset(offsets, abs_start),
+                page_end=_page_for_offset(offsets, abs_end),
+                text=text[start:end],
                 )
         )
     return chunks
@@ -166,18 +181,42 @@ def _split_section_body(
     """Split an overlong section into sub-clause chunks, tagged with the parent section."""
     matches = list(SUBSECTION_RE.finditer(body))
     if len(matches) < 2:
-        return [
-            Chunk(
-                doc_id=doc_id,
-                chunk_id=f"{doc_id}::sec-{section_number}",
-                heading=heading,
-                section_number=section_number,
-                parent_section_number=None,
-                page_start=_page_for_offset(offsets, body_start_offset),
-                page_end=_page_for_offset(offsets, body_start_offset + len(body)),
-                text=body.strip(),
+        # No numeric "(1)", "(2)" subsections to split on (some documents use
+        # decimal headings like "3.1" or named ones like "Guiding Principle 2"
+        # instead, which this chunker doesn't parse as structure). Rather than
+        # ship one huge undivided chunk, fall back to paragraph grouping — same
+        # approach used for documents with no numbering at all — so retrieval
+        # still gets reasonably sized pieces, at the cost of citing by
+        # paragraph position instead of a specific named subsection.
+        merged = _merge_spans(_paragraph_spans(body), PARAGRAPH_TARGET_CHARS)
+        if len(merged) < 2:
+            return [
+                Chunk(
+                    doc_id=doc_id,
+                    chunk_id=f"{doc_id}::sec-{section_number}",
+                    heading=heading,
+                    section_number=section_number,
+                    parent_section_number=None,
+                    page_start=_page_for_offset(offsets, body_start_offset),
+                    page_end=_page_for_offset(offsets, body_start_offset + len(body)),
+                    text=body.strip(),
+                )
+            ]
+        chunks = []
+        for i, (start, end) in enumerate(merged, start=1):
+            chunks.append(
+                Chunk(
+                    doc_id=doc_id,
+                    chunk_id=f"{doc_id}::sec-{section_number}-part-{i}",
+                    heading=heading,
+                    section_number=section_number,
+                    parent_section_number=section_number,
+                    page_start=_page_for_offset(offsets, body_start_offset + start),
+                    page_end=_page_for_offset(offsets, body_start_offset + end),
+                    text=body[start:end],
+                )
             )
-        ]
+        return chunks
 
     chunks = []
     for i, m in enumerate(matches):
