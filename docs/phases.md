@@ -19,11 +19,40 @@ Sequential, gated phases per PRD §9 — no fixed schedule. Each phase gates the
       0 stray noise fragments.
 - [x] User review/approval of chunk output — approved 2026-09-12.
 
-## Phase 2 — Basic Retrieval — not started
-Embeddings + ChromaDB indexing, vector-only retrieval.
+## Phase 2 — Basic Retrieval — DONE
+- [x] `src/embeddings.py` (BAAI/bge-m3 via sentence-transformers), `src/indexing.py`
+      (ChromaDB persistent collection), `src/retrieval.py` (vector top-k).
+- [x] Gate: 5 hand-checked queries spanning all 5 docs (`src/run_phase2.py`). 4/5 return
+      excellent top results (query 5 nails the exact statistic; query 4 returns only
+      AYUSH-2025 chunks as expected).
+- [x] Query 1 ("Can traditional knowledge be patented in India?") initially didn't surface
+      `patents_act_1970::sec-3` even in the top 20 — investigated rather than waved through.
+      Root cause verified directly (not guessed): Section 3 pooled 16 unrelated statutory
+      exclusions into one embedding, diluting clause (p)'s signal (isolating it alone raised
+      cosine similarity 0.455 -> 0.568). Fixed the chunker accordingly (see Phase 1 log and
+      `docs/decisions.md`) — this also surfaced and fixed 2 more real content-loss/duplicate
+      bugs in the chunker, now covered by `tests/test_chunking.py`.
+- [x] After the fix, clause (p) still doesn't rank in the top 20-30 for this specific
+      phrasing, confirmed against **both** vector and BM25 (and their RRF hybrid) — so this
+      is not primarily a chunking problem. Root cause: clause (p)'s actual statutory text
+      never contains the word "patent" ("...is traditional knowledge...are not inventions"),
+      while the query asks "can X be *patented*" — a genuine vocabulary/framing gap between
+      terse negative-framed statute language and natural-language questions.
+- [x] Verified this doesn't block the gate: the top-ranked result (TK Guidelines 2012 §3)
+      is substantively correct and well-grounded (cites §2(1)(j) and §3(e) directly) — a
+      user would get an accurate, citable answer, just not from the Act's own §3(p) text.
+      **Carried forward as a concrete design input for Phase 5**: Layer 3 (authority
+      tagging) should be able to prefer/promote an Act-level citation over a Guideline-level
+      one discussing the same rule, since raw similarity ranking won't reliably do this on
+      its own for terse statutory clauses.
+- [x] Final corpus: 328 chunks (up from 288 after the clause-splitting fix), 0 duplicates,
+      0 empty.
 
-## Phase 3 — Hybrid Retrieval — not started
-Add BM25, compare vs vector-only on 15 test questions.
+## Phase 3 — Hybrid Retrieval — IN PROGRESS
+- [x] `src/bm25_retrieval.py` (BM25 keyword index) and `src/hybrid_retrieval.py`
+      (Reciprocal Rank Fusion) built and unit-tested.
+- [ ] Gate: compare vector-only vs. hybrid on 15 test questions — hybrid must genuinely
+      outperform, not just add complexity. Not yet run at the 15-question scale.
 
 ## Phase 4 — Confidence + Verification — not started
 Layer 1 (confidence gate) + Layer 2 (claim-support verification).
