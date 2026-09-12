@@ -313,7 +313,13 @@ def chunk_document(doc_id: str, pages: list[str], body_start_anchor: str | None 
     front_matter_chunks: list[Chunk] = []
     if body_start_anchor:
         found = full_text.find(body_start_anchor)
-        if found != -1:
+        if found == -1:
+            raise ValueError(
+                f"{doc_id}: body_start_anchor {body_start_anchor!r} not found in extracted "
+                "text (PDF text extraction can insert stray spaces/line-wraps — check the "
+                "exact substring rather than silently chunking the whole document, TOC included)"
+            )
+        else:
             anchor_pos = found
             front_text = full_text[:anchor_pos].strip()
             if front_text:

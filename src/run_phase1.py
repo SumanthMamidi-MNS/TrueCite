@@ -1,4 +1,4 @@
-"""Phase 1 gate: parse + structurally chunk 3 sample documents and show the output.
+"""Phase 1 gate: parse + structurally chunk all corpus documents and show the output.
 
 Run: .venv/Scripts/python.exe src/run_phase1.py
 """
@@ -15,16 +15,26 @@ CORPUS_PROCESSED = Path(__file__).resolve().parent.parent / "corpus" / "processe
 # (doc_id, filename, body_start_anchor) — anchor marks where TOC/front matter ends
 # and the real structured body begins, so the TOC's own section numbers aren't
 # mistaken for the document's structure.
-SAMPLE_DOCS = [
+ALL_DOCS = [
     ("patents_act_1970", "patents_act_1970.pdf", "BE it enacted by Parliament"),
     ("ipo_tk_biological_material_guidelines_2012", "ipo_tk_biological_material_guidelines_2012.pdf", None),
     ("pib_faq_patents_traditional_ayurvedic_medicine_2013", "pib_faq_patents_traditional_ayurvedic_medicine_2013.txt", None),
+    (
+        "ipo_ayush_examination_guidelines_2025",
+        "ipo_ayush_examination_guidelines_2025.pdf",
+        "Ayush is traditional and non -conventional",  # PDF extraction inserts a stray space here
+    ),
+    (
+        "wipo_documenting_tk_toolkit",
+        "wipo_documenting_tk_toolkit.pdf",
+        "Documenting traditional knowledge (TK) is now widely",  # cut before a mid-sentence line wrap
+    ),
 ]
 
 
 def main():
     CORPUS_PROCESSED.mkdir(parents=True, exist_ok=True)
-    for doc_id, filename, anchor in SAMPLE_DOCS:
+    for doc_id, filename, anchor in ALL_DOCS:
         path = CORPUS_RAW / filename
         pages = extract_pages(path)
         chunks = chunk_document(doc_id, pages, body_start_anchor=anchor)
@@ -41,9 +51,12 @@ def main():
         print("-" * 70)
         for c in chunks[:6]:
             preview = c.text[:160].replace("\n", " ")
+            # Windows console encoding (cp1252) can't print every PDF glyph
+            # (e.g. private-use-area bullet chars); replace rather than crash.
+            safe_preview = preview.encode("ascii", errors="replace").decode("ascii")
             print(f"[{c.chunk_id}] p{c.page_start}-{c.page_end} ({c.char_count} chars)")
             print(f"  heading: {c.heading!r}")
-            print(f"  text:    {preview}...")
+            print(f"  text:    {safe_preview}...")
         if len(chunks) > 6:
             print(f"  ... ({len(chunks) - 6} more chunks)")
 
