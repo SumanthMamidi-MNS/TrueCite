@@ -60,8 +60,13 @@ Sequential, gated phases per PRD §9 — no fixed schedule. Each phase gates the
       One query regressed slightly (rank 1->2), expected/acceptable — RRF fusion isn't
       guaranteed to never trade off a single-method's best case.
 
-## Phase 4 — Confidence + Verification — not started
-Layer 1 (confidence gate) + Layer 2 (claim-support verification).
+## Phase 4 — Confidence + Verification — IN PROGRESS
+- [x] Layer 1 (`src/confidence_gate.py`): threshold calibrated against real (query,
+      distance) evidence, not guessed — see `docs/decisions.md`. Verified against 10 real
+      cases (5 on-topic incl. 2 deliberately tricky "topically relevant but not specific"
+      ones, 5 genuinely unrelated): all classified correctly.
+- [ ] Layer 2 (claim-support verification via separate Claude API call): needs an
+      Anthropic API key — blocked pending user confirmation of access (see chat).
 
 ## Phase 5 — Authority & Citation — not started
 Layer 3 (date/authority tagging), citation-formatted generation.
