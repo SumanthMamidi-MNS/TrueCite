@@ -6,4 +6,4 @@ corpus/processed/*.json
 corpus/eval_results/
 chroma_db/
 *.log
-.claude/
+.claude/scheduled_tasks.lock
