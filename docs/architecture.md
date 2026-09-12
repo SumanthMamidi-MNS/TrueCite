@@ -2,9 +2,10 @@
 
 ## Tech stack
 - Language: Python 3.12
-- Framework(s): none yet (CLI scripts only). Claude API integration arrives in Phase 4/5.
+- Framework(s): none yet (CLI scripts only).
 - Database: ChromaDB (local, embedded, persisted to `corpus/chroma_db/`) — chosen over Qdrant despite Qdrant already running in the user's Docker Desktop; see `docs/decisions.md`.
-- Key libraries: `pypdf` (PDF text extraction), `sentence-transformers` (BAAI/bge-m3 embeddings), `chromadb`, `rank-bm25`, `pytest`.
+- LLM (Layer 2 verification): local Ollama, Qwen 2.5 7B — **temporary substitution** for the Claude API the PRD specifies (§7), since no Anthropic API key is configured yet. Revisit once one exists; see `docs/decisions.md`. Generation (Phase 5) will face the same question.
+- Key libraries: `pypdf` (PDF text extraction), `sentence-transformers` (BAAI/bge-m3 embeddings), `chromadb`, `rank-bm25`, `requests` (Ollama HTTP API), `pytest`.
 
 ## Folder structure
 ```
@@ -23,14 +24,17 @@ src/
   retrieval.py         # vector-only top-k retrieval
   bm25_retrieval.py     # BM25 keyword retrieval, independent of the vector store
   hybrid_retrieval.py   # Reciprocal Rank Fusion of vector + BM25 rankings
+  confidence_gate.py    # Layer 1: retrieval-distance threshold gate
+  verification.py       # Layer 2: claim-support verification (local Ollama, see below)
   run_phase1.py   # Phase 1 gate script: parses+chunks all corpus docs, prints + saves output
   run_phase2.py   # Phase 2 gate script: builds the index, runs 5 hand-checked test queries
-tests/            # pytest suite (22 tests): chunking, BM25, RRF fusion, authority metadata
+  run_phase3.py   # Phase 3 gate script: vector-only vs. hybrid on 15 test questions
+tests/            # pytest suite (32 tests): chunking, BM25, RRF fusion, authority, confidence gate, verification
 requirements.txt
 .venv/            # local virtualenv, not committed
 ```
 
-## Data flow (current, through Phase 3 in progress)
+## Data flow (current, through Phase 4)
 1. `parsing.extract_pages` reads a PDF (via `pypdf`) or `.txt` file and returns one text string per page.
 2. `chunking.chunk_document` joins page texts (tracking each page's character offset, for citation page numbers), cleans page-footer noise (amendment footnotes, bare page numbers, amendment-insertion brackets), then chunks structurally, trying each strategy in order:
    - Detect numbered sections/paragraphs at line start; filter out footnote-content false-positives; keep only a strictly-increasing numeric sequence (handles page footnotes that restart their own numbering, and mid-sentence lettered cross-references that would otherwise look like a new clause).
@@ -43,10 +47,12 @@ requirements.txt
 6. Retrieval, current state:
    - `retrieval.retrieve(query, top_k)` — vector-only, cosine/L2 via ChromaDB.
    - `bm25_retrieval.retrieve_bm25(query, top_k)` — keyword-only.
-   - `hybrid_retrieval.retrieve_hybrid(query, top_k, candidate_k)` — Reciprocal Rank Fusion of both rankings. Built and unit-tested; not yet validated at Phase 3's 15-question gate scale.
-7. `authority.py` holds hand-curated authority-level/effective-date metadata per doc_id, ready for Layer 3 (not yet wired into retrieval/generation).
+   - `hybrid_retrieval.retrieve_hybrid(query, top_k, candidate_k)` — Reciprocal Rank Fusion of both rankings. Validated at Phase 3's 15-question gate: average rank 1.67 (vector) -> 1.27 (hybrid), a genuine improvement.
+7. `confidence_gate.passes_confidence_gate(hits)` (Layer 1) — refuses immediately (returns False) if no retrieved hit clears distance 0.90, calibrated against real on-topic/off-topic query evidence (see `docs/decisions.md`).
+8. `verification.verify_claim(claim, passage)` (Layer 2) — a separate local-LLM call (Ollama, Qwen 2.5 7B) judging whether a specific passage actually supports a specific claim; raises rather than defaulting to a verdict on any malformed model output.
+9. `authority.py` holds hand-curated authority-level/effective-date metadata per doc_id, ready for Layer 3 (not yet wired into retrieval/generation).
 
-Not yet built: confidence gate (Layer 1), claim-support verification (Layer 2), authority/date-aware citation resolution (Layer 3), generation, UI.
+Not yet built: authority/date-aware citation resolution (Layer 3), generation, UI. Layers 1-2 are not yet wired into one end-to-end pipeline function — each is verified standalone; Phase 5 composes them with generation.
 
 ## Known retrieval limitation (see docs/decisions.md, docs/phases.md Phase 2)
 Terse, negatively-framed statutory clauses (e.g. Patents Act §3(p), which never uses the

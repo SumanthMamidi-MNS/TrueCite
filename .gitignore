@@ -5,3 +5,4 @@ __pycache__/
 corpus/processed/*.json
 chroma_db/
 *.log
+.claude/
