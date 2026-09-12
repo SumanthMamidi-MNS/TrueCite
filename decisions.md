@@ -1,0 +1,9 @@
+# Decisions log
+
+- 2026-09-12: Use `pypdf` for PDF parsing in Phase 1 instead of `unstructured`, because `unstructured`'s system dependencies (poppler/tesseract) are heavy to set up on Windows and pypdf is sufficient for text-based legal PDFs; revisit if scanned/image-only PDFs show up in the corpus.
+- 2026-09-12: Local git repo initialized, no GitHub remote yet — commits stay local until the user explicitly asks to push/create a repo.
+- 2026-09-12: Python dependency management via venv + requirements.txt (user preference).
+- 2026-09-12: Structural chunker uses a cascading strategy (numbered sections/paragraphs -> subsection split if oversized -> paragraph fallback if no numbering detected) instead of one fixed pattern, because the corpus's three document types (Act, numbered-paragraph guideline, plain FAQ) each use different structure.
+- 2026-09-12: Section-number detection runs once globally over a document's full body text (not per-chapter), because Act section numbers are continuous across chapters — per-chapter matching let page-footnote numbering (which restarts low) collide with real section numbers again at each new chapter.
+- 2026-09-12: Square-bracket amendment-insertion markers (e.g. "3[11A. ...") are stripped from page text before chunking — they're pure editorial typography in Indian bare acts, and left in place they hide the real section number from line-start detection (was silently merging section 11A's text into section 11).
+- 2026-09-12: Lettered definition clauses (e.g. Section 2's "(a)", "(ab)", "(ac)"...) are not sub-split — only numeric subsections "(1)", "(2)" are. Section 2 (Definitions) therefore stays a single ~6000-char chunk, over the 3000-char soft target. Deferred rather than building alphabetic-clause splitting now, since the project's core section (3(p), TK non-patentability) is well within size limits and definitions aren't the retrieval focus.
