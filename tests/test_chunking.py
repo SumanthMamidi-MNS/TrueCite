@@ -163,6 +163,94 @@ def test_inline_subsection_1_is_not_lost_when_section_has_numeric_subsections():
     assert "prescribed manner" in sub2.text
 
 
+def test_treaty_article_headings_are_chunked_when_no_numeric_sections_exist():
+    # A second numbering convention alongside "N. Title.—": international
+    # treaty text numbers "ARTICLE N" with the title on the next line. Only
+    # reached when the numeric SECTION_RE finds nothing at all — this test's
+    # page has zero "N. " style sections, so it must fall into this path
+    # rather than plain unstructured paragraph chunking.
+    page = (
+        "Have agreed as follows:\n"
+        "ARTICLE 1\n"
+        "OBJECTIVES\n"
+        "The objectives of this Treaty are to enhance the efficacy of the "
+        "patent system with regard to genetic resources, long enough to count.\n"
+        "ARTICLE 2\n"
+        "LIST OF TERMS\n"
+        "For the purposes of this Treaty, 'Applicant' means the person who "
+        "applies for the grant of a patent, long enough to count as real body text.\n"
+    )
+    chunks = chunk_document("test_treaty", [page])
+    article1 = next((c for c in chunks if c.section_number == "Article 1"), None)
+    assert article1 is not None, [c.section_number for c in chunks]
+    assert article1.heading == "OBJECTIVES"
+    assert "genetic resources" in article1.text
+    article2 = next((c for c in chunks if c.section_number == "Article 2"), None)
+    assert article2 is not None
+    assert article2.heading == "LIST OF TERMS"
+
+
+def test_treaty_article_heading_tolerates_narrow_nbsp_after_number():
+    # Confirmed directly on the real WIPO GRATK Treaty PDF's extracted text:
+    # one heading used a narrow-no-break space (U+202F) instead of an ASCII
+    # space after the article number, which a plain [ \t] class would miss.
+    page = (
+        "Have agreed as follows:\n"
+        "ARTICLE 1    \n"
+        "DEPOSITARY   \n"
+        "The Director General is the depositary of this Treaty, long enough "
+        "to count as real body text for this synthetic test case here.\n"
+        "ARTICLE 2\n"
+        "LANGUAGES\n"
+        "This Treaty shall be signed in a single original, long enough to "
+        "count as real body text for this synthetic test case as well.\n"
+    )
+    chunks = chunk_document("test_treaty", [page])
+    section_numbers = [c.section_number for c in chunks]
+    assert "Article 1" in section_numbers, section_numbers
+
+
+def test_numbered_sections_still_take_priority_over_article_pattern():
+    # A document with real numbered sections must never fall into the treaty
+    # path even if it happens to also contain the literal word "ARTICLE"
+    # somewhere in body text (e.g. a cross-reference to another instrument).
+    page = (
+        "BE it enacted by Parliament as follows:\n"
+        "1. Short title.—(1) This may be called the Test Act, referencing "
+        "ARTICLE 5 of an unrelated treaty for context, long enough for the body.\n"
+        "2. Definitions.—(1) In this Act, unless the context otherwise "
+        "requires, this is a long enough definitions clause for the test.\n"
+    )
+    chunks = chunk_document("test_act", [page], body_start_anchor="BE it enacted")
+    section_numbers = [c.section_number for c in chunks if c.section_number]
+    assert "1" in section_numbers and "2" in section_numbers
+    assert not any(s and s.startswith("Article") for s in section_numbers)
+
+
+def test_converter_artifact_line_is_stripped():
+    page = (
+        "BE it enacted by parliament as follows:\n"
+        "/root/convert/apache-tomcat-6.0.20/temp/BDA, 20022408441392335261370.doc\n"
+        "1. Short title, extent and commencement.\n"
+        "(1) This Act may be called the Test Act, long enough for real body text.\n"
+    )
+    chunks = chunk_document("test_act", [page], body_start_anchor="BE it enacted")
+    assert not any("apache-tomcat" in c.text for c in chunks)
+
+
+def test_doc_code_running_header_is_stripped():
+    page = (
+        "BE it enacted by Parliament as follows:\n"
+        "1. Short title.—(1) This may be called the Test Act and extends to "
+        "the whole of India for all purposes described at some length here.\n"
+        "GRATK/DC/7\n"
+        "2. Definitions.—(1) In this Act, unless the context otherwise "
+        "requires, this is a long enough definitions clause for the test.\n"
+    )
+    chunks = chunk_document("test_act", [page], body_start_anchor="BE it enacted")
+    assert not any("GRATK/DC/7" in c.text for c in chunks)
+
+
 def test_midsentence_lettered_reference_does_not_create_duplicate_clause():
     # A cross-reference like "...described in clause (b) of this section..."
     # can end up starting its own PDF-wrapped line without being a real new

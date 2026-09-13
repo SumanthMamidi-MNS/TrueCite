@@ -102,10 +102,22 @@ both read the `OLLAMA_MODEL` environment variable (default `qwen2.5:7b`)
 instead of being hardcoded, and `/api/config` exposes the active value so the
 UI's sidebar model badge always reflects whatever is actually configured.
 
+## Corpus (7 documents as of 2026-09-13, see corpus/manifest.md)
+Patents Act 1970 (Act), Biological Diversity Act 2002 (Act), two IPO guideline
+documents (2012 TK/Biological Material, 2025 AYUSH Examination), the WIPO TK
+documentation toolkit and the WIPO GRATK Treaty 2024 (both Informational —
+the GRATK treaty is adopted but not yet in force, deliberately tagged below
+Act/Guideline for that reason, see `src/authority.py`), and a 2013 PIB press
+release. `chunking.py` supports two structural-numbering conventions: Act/
+guideline-style "N. Title.—" (the original 5 documents) and treaty-style
+"ARTICLE N" with the title on the next line (added for the GRATK treaty) —
+the second is only ever tried as a fallback when the first finds nothing, so
+it can't change how any previously-verified document chunks.
+
 ## Known limitations (see docs/decisions.md for full evidence)
 - **Retrieval vocabulary gap**: terse, negatively-framed statutory clauses (e.g. Patents Act §3(p), which never uses the word "patent") don't reliably rank highly against natural-language questions ("can X be patented?"), in neither vector nor BM25 nor hybrid. The system still returns substantively correct, citable answers from secondary sources discussing the same rule in fuller prose.
 - **Local LLM reliability**: Qwen 2.5 7B (standing in for the Claude API) is non-deterministic on borderline claim-verification judgments — mitigated with majority-vote verification, not eliminated. Revisit once an Anthropic API key is available.
-- **No genuine version-conflict test case** exists in the current 5-document corpus for Layer 3's core "surface the current source" requirement.
+- **No genuine version-conflict test case** exists in the current corpus for Layer 3's core "surface the current source" requirement. A real candidate (Patents Rules 2003 vs. its 2024 amendment) was found and rejected on data-quality grounds — the only available mirror of the base 2003 text was a corrupted OCR scan, see `corpus/manifest.md`.
 
 ## Deployment / how it runs
 Local only, for now. Requires Ollama running locally with `qwen2.5:7b` pulled, in addition to the Python env. `python -m venv .venv` + `pip install -r requirements.txt`, then:

@@ -68,12 +68,22 @@ duplicate-citation bugs, not just style issues).
 
 ## Corpus
 
-Five real documents, sourced and provenance-tracked in `corpus/manifest.md`:
-the Patents Act 1970, two IPO guideline documents (2012 TK/Biological Material,
-2025 AYUSH Examination), a WIPO TK documentation toolkit, and a 2013 PIB press
-release. **Known gap**: the actual TKDL database isn't public (restricted to
-patent offices under NDA) — the WIPO toolkit is the closest public substitute,
-tagged at a lower authority level accordingly.
+Seven real documents, sourced and provenance-tracked in `corpus/manifest.md`:
+the Patents Act 1970, the Biological Diversity Act 2002, two IPO guideline
+documents (2012 TK/Biological Material, 2025 AYUSH Examination), a WIPO TK
+documentation toolkit, the 2024 WIPO Treaty on IP, Genetic Resources and
+Associated Traditional Knowledge, and a 2013 PIB press release.
+
+**Known gaps**: the actual TKDL database isn't public (restricted to patent
+offices under NDA) — the WIPO toolkit is the closest public substitute, tagged
+at a lower authority level accordingly. The WIPO GRATK Treaty is real,
+adopted text but **not yet in force** (needs 15 ratifications) — tagged
+Informational rather than Act specifically so it can never be cited as if it
+were binding Indian law. A real Patents Rules / 2024 Amendment pair — which
+would also have covered filing fees and given Layer 3 a genuine two-version
+conflict to resolve — was sourced but rejected: the only available mirror of
+the base 2003 text was a corrupted OCR scan, unacceptable for a citation-trust
+tool (see `corpus/manifest.md` for the specifics).
 
 ## Running it
 
@@ -160,6 +170,16 @@ discovered later by someone else:
   passage (that's what makes Layer 2 possible); a comparison question gets a
   claim list with per-source authority tiers rather than a table, since a
   table cell doesn't have a single passage to verify it against.
+- **The two WIPO documents get confused with each other.** Asking about the
+  2024 GRATK Treaty's Article 3 disclosure requirement, the local model
+  repeatedly drafted a claim about the older WIPO TK documentation toolkit
+  instead — even though the treaty's own Article 3 text was correctly
+  retrieved and given to it every time (confirmed directly, across 4 query
+  phrasings). Layer 2 caught every one of these mismatches and refused rather
+  than showing a wrong answer, so this shows up as an elevated refusal rate
+  for treaty-specific questions, not a false answer. Same underlying cause as
+  the local-model extraction-quality limitation below, just harder to trigger
+  before this corpus had two similarly-themed WIPO sources.
 - **Local-model extraction quality.** Phase 6 measured a 5/11 false-refusal
   rate on answerable questions. The unanswerable side is clean (5/5 correct
   refusals, 0 false answers) — the failures are specifically the smaller

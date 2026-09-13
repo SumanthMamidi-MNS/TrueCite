@@ -26,6 +26,18 @@ from bisect import bisect_right
 from dataclasses import dataclass, field
 
 SECTION_RE = re.compile(r"^[ \t]*(\d{1,4}[A-Z]{0,2})\.\s+(.*)$", re.MULTILINE)
+# A second numbering convention, alongside the Act-style "N. Title.—" above:
+# international treaty text (e.g. the WIPO GRATK Treaty) numbers "ARTICLE N"
+# with its title on the following line, not inline. Character class includes
+# U+00A0/U+202F (non-breaking/narrow-no-break space) because at least one real
+# heading in that document used a narrow-no-break space instead of ASCII space
+# after the article number — confirmed directly on the source PDF's extracted
+# text, not a hypothetical. Only ever tried when SECTION_RE finds fewer than 2
+# matches (see _chunk_region), so it can't affect any numbered-section document.
+ARTICLE_HEADING_RE = re.compile(
+    r"^ARTICLE\s+(\d{1,2})[ \t  ]*\r?\n[ \t  ]*([^\n]{2,80})[ \t  ]*$",
+    re.MULTILINE,
+)
 SUBSECTION_RE = re.compile(r"^[ \t]*\((\d{1,3}[A-Za-z]?)\)\s+", re.MULTILINE)
 LETTERED_CLAUSE_RE = re.compile(r"^[ \t]*\(([a-z]{1,3})\)\s+", re.MULTILINE)
 # Subsection "(1)" is almost always inline right after the heading's own
@@ -88,7 +100,19 @@ _FOOTNOTE_LINE_RE = re.compile(
     r"Sub-?clause\s*\(|Clause\s*\([a-z]+\)|Sub-?section\s*\(|Received\sthe\sassent|\d{1,2}-\d{1,2}-\d{4}).*$",
     re.IGNORECASE | re.MULTILINE,
 )
-_PAGE_NUMBER_LINE_RE = re.compile(r"^\s*(\d{1,4}|Page \d{1,4} of \d{1,4})\s*$", re.MULTILINE | re.IGNORECASE)
+_PAGE_NUMBER_LINE_RE = re.compile(
+    r"^\s*(\d{1,4}|Page \d{1,4}(\s+of\s+\d{1,4})?)\s*$", re.MULTILINE | re.IGNORECASE
+)
+# Running-header document codes, e.g. the WIPO GRATK Treaty PDF prints
+# "GRATK/DC/7" as its own line at every page break — administrative apparatus,
+# not treaty text, and the all-caps-slash-digit shape is specific enough that
+# no real section/clause text would ever appear as a standalone line matching it.
+_DOC_CODE_HEADER_LINE_RE = re.compile(r"^[A-Z]{2,10}/[A-Z]{2,6}/\d{1,4}\s*$", re.MULTILINE)
+# A document-conversion tool's own temp-file path, leaked into every page of
+# the Biological Diversity Act 2002 mirror this corpus sources from (confirmed
+# on the actual extracted text — a stray artifact of whatever HTML/DOC-to-PDF
+# pipeline the source site used, not part of the Act itself).
+_CONVERTER_ARTIFACT_LINE_RE = re.compile(r"^/root/convert/.*\.doc\s*$", re.MULTILINE | re.IGNORECASE)
 _EXCESS_BLANK_LINES_RE = re.compile(r"\n{3,}")
 
 # Bare Acts mark amendment-inserted spans with a footnote-reference digit glued
@@ -107,6 +131,8 @@ _BARE_BRACKET_RE = re.compile(r"[\[\]]")
 def _clean_page_text(text: str) -> str:
     text = _FOOTNOTE_LINE_RE.sub("", text)
     text = _PAGE_NUMBER_LINE_RE.sub("", text)
+    text = _DOC_CODE_HEADER_LINE_RE.sub("", text)
+    text = _CONVERTER_ARTIFACT_LINE_RE.sub("", text)
     text = _FUSED_FOOTNOTE_BRACKET_RE.sub("", text)
     text = _BARE_BRACKET_RE.sub("", text)
     text = _EXCESS_BLANK_LINES_RE.sub("\n\n", text)
@@ -385,6 +411,68 @@ def _monotonic_lettered_clauses(body: str) -> list[re.Match]:
     return accepted
 
 
+def _chunk_treaty_articles(
+    doc_id: str, text: str, region_start_offset: int, offsets: list[int], matches: list[re.Match]
+) -> list[Chunk]:
+    """Chunk a treaty's "ARTICLE N" / title-on-next-line structure.
+
+    Mirrors _chunk_region's own preamble + oversized-section handling (reusing
+    _split_by_lettered_clauses / _split_section_body directly) rather than
+    duplicating that logic — the only real difference is where the section
+    number and heading come from.
+    """
+    chunks: list[Chunk] = []
+    preamble = text[: matches[0].start()].strip()
+    if len(preamble) >= MIN_SECTION_BODY_CHARS:
+        chunks.append(
+            Chunk(
+                doc_id=doc_id,
+                chunk_id=f"{doc_id}::preamble",
+                heading="Preamble",
+                section_number=None,
+                parent_section_number=None,
+                page_start=_page_for_offset(offsets, region_start_offset),
+                page_end=_page_for_offset(offsets, region_start_offset + matches[0].start()),
+                text=preamble,
+            )
+        )
+
+    for i, m in enumerate(matches):
+        section_number = f"Article {m.group(1)}"
+        heading = m.group(2).strip()
+        body_start = m.start()
+        body_end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        body = text[body_start:body_end]
+        if len(body) < MIN_SECTION_BODY_CHARS:
+            continue
+
+        abs_body_start = region_start_offset + body_start
+        slug = m.group(1)
+        lettered_clause_count = len(_monotonic_lettered_clauses(body))
+        if lettered_clause_count >= MIN_LETTERED_CLAUSES_TO_SPLIT:
+            chunks.extend(
+                _split_by_lettered_clauses(doc_id, section_number, heading, body, abs_body_start, offsets)
+            )
+        elif len(body) > MAX_CHUNK_CHARS:
+            chunks.extend(
+                _split_section_body(doc_id, section_number, heading, body, abs_body_start, offsets)
+            )
+        else:
+            chunks.append(
+                Chunk(
+                    doc_id=doc_id,
+                    chunk_id=f"{doc_id}::article-{slug}",
+                    heading=heading,
+                    section_number=section_number,
+                    parent_section_number=None,
+                    page_start=_page_for_offset(offsets, abs_body_start),
+                    page_end=_page_for_offset(offsets, region_start_offset + body_end),
+                    text=body.strip(),
+                )
+            )
+    return chunks
+
+
 def _chunk_region(
     doc_id: str, text: str, region_start_offset: int, offsets: list[int]
 ) -> list[Chunk]:
@@ -393,6 +481,9 @@ def _chunk_region(
     content_filtered = [m for m in raw_matches if not FOOTNOTE_CONTENT_RE.match(m.group(2))]
     matches = _filter_monotonic(content_filtered)
     if len(matches) < 2:
+        article_matches = list(ARTICLE_HEADING_RE.finditer(text))
+        if len(article_matches) >= 2:
+            return _chunk_treaty_articles(doc_id, text, region_start_offset, offsets, article_matches)
         return _fallback_paragraph_chunks(
             doc_id, text, offsets, region_start_offset, heading="(unstructured)"
         )

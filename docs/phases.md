@@ -171,11 +171,43 @@ Sequential, gated phases per PRD §9 — no fixed schedule. Each phase gates the
 - [x] `README.md`: architecture, the specific failure mode targeted (citation-real-but-
       unsupporting, per the 2025 Stanford/Magesh study), how to run it, and every known
       limitation found during testing (not discovered later by someone else).
-- [ ] Flagged, not built: the Biological Diversity Act 2002 is currently only referenced
-      secondhand through the 2012 IPO guideline, not indexed as its own primary source —
-      a real corpus gap found via live testing this session. Needs a user decision before
-      sourcing it (new document → chunking → re-index → re-eval is a real chunk of work,
-      not a quick add).
+- [x] Flagged the Biological Diversity Act 2002 gap to the user, who approved expanding
+      the corpus — see Phase 1b below.
+
+## Phase 1b — Corpus Expansion — DONE
+- [x] User asked to "get as many documents and sources as possible" after the Biological
+      Diversity Act gap above was flagged. Sourced and vetted 4 real candidate documents;
+      added the 2 that passed a genuine quality bar rather than padding for count.
+- [x] Added: **Biological Diversity Act, 2002** (Act) — closes the flagged gap, §55's
+      actual penalty text is now a primary chunk instead of only the 2012 guideline's
+      summary of it. **WIPO Treaty on IP, Genetic Resources and Associated Traditional
+      Knowledge (2024)** (Informational — adopted but not yet in force, tagged
+      deliberately so it can't be cited as binding law) — covers the "international
+      regimes" half of the PRD's own problem statement for the first time.
+- [x] Rejected: the Patents Rules, 2003 / Patents (Amendment) Rules, 2024 pair, which
+      would also have supplied filing-fee content and a genuine two-version
+      authority-conflict test case. The only available mirror of the base 2003 text was
+      a corrupted OCR scan (confirmed word-level corruption). Dropped rather than
+      indexed — see `corpus/manifest.md` for the full sourcing trail.
+- [x] Extended `chunking.py` with a second, additive-only numbering pattern for
+      treaty-style "ARTICLE N" headings (only tried when the existing numeric pattern
+      finds nothing — verified zero effect on all 5 previously-verified documents) plus
+      two small noise-filters for artifacts found in the new PDFs. 5 new regression tests.
+- [x] Manually verified ~15 chunks across both new documents (no broken cross-references,
+      no truncation) — same bar as Phase 1's original gate. Re-ran the full suite (54
+      tests pass) and rebuilt the vector index.
+- [x] Added 3 eval questions exercising the new content (`docs/eval_questions.md`),
+      including one that specifically checks the system doesn't overstate the unratified
+      treaty as binding law. The version-conflict gap (category D) remains open — noted
+      honestly rather than closed on a technicality.
+- [x] Live-verified post-rebuild (445 chunks total, zero regression confirmed by diffing
+      old-vs-new chunking output on all 5 original docs). Found and documented a new
+      real limitation this expansion introduced: the local model sometimes conflates the
+      two WIPO-published documents (the new GRATK Treaty and the pre-existing TK
+      toolkit) when drafting a claim — confirmed the correct passage was always
+      retrieved, added a source-labeling mitigation (partial improvement, didn't fully
+      fix it), and confirmed Layer 2 catches every resulting mismatch — the user-facing
+      cost is an elevated refusal rate on treaty-specific questions, never a false answer.
 
 ## Notes
 - No fixed calendar — move to the next phase only when the current one is verified working.

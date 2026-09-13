@@ -47,11 +47,16 @@ corpus. Flagging rather than faking results for them.
 
 9. **Q:** Under what section of the Biological Diversity Act, 2002 must approval be sought before filing a patent application based on Indian biological resources?
    **Expected:** Section 6(1).
-   **Source:** `ipo_tk_biological_material_guidelines_2012`, `pib_faq_patents_traditional_ayurvedic_medicine_2013::para-3`
+   **Source:** `biological_diversity_act_2002::sec-6` (2026-09-13: now indexed directly — previously only answerable via secondhand mentions in `ipo_tk_biological_material_guidelines_2012` / `pib_faq_patents_traditional_ayurvedic_medicine_2013::para-3`, both still valid corroborating sources).
 
 10. **Q:** What is the penalty under the Biological Diversity Act, 2002 for contravening its access provisions?
     **Expected:** Imprisonment up to 5 years, or a fine up to ten lakh rupees (higher if damage caused exceeds ten lakh rupees), per Section 55(1).
-    **Source:** `ipo_tk_biological_material_guidelines_2012`
+    **Source:** `biological_diversity_act_2002::sec-55` (2026-09-13: this is the real gap found live during UI testing — the system had only ever been able to cite the 2012 guideline's *summary* of this penalty, not the Act itself; now it can cite the primary source directly, and Layer 3 should prefer it over the guideline when both are retrieved).
+
+10a. **Q:** What does the new WIPO treaty on genetic resources and traditional knowledge require a patent applicant to disclose?
+    **Expected:** Where a claimed invention is based on genetic resources (and/or associated traditional knowledge), the applicant must disclose the country of origin (or source) of the genetic resources / the Indigenous Peoples or local community providing the associated TK — per Article 3 of the WIPO Treaty on IP, Genetic Resources and Associated Traditional Knowledge (2024). A correct answer should also flag that this treaty is **adopted but not yet in force** (needs 15 ratifications) — treating it as binding Indian law today would be a real overstatement error, exactly the kind of thing Layer 3's authority tagging exists to prevent (tagged Informational, not Act, for this reason — see `src/authority.py`).
+    **Source:** `wipo_gratk_treaty_2024::article-3`
+    **Observed (2026-09-13, live-tested):** Currently refuses across every phrasing tried, including one naming "Article 3" directly. Article 3 is correctly retrieved every time, but the local model repeatedly drafts a claim describing the *other* WIPO document in this corpus (the TK documentation toolkit) instead, and Layer 2 correctly rejects the resulting mismatch. Zero false answers observed — the honest failure mode here is over-refusal, not fabrication — but this question should not be expected to cleanly succeed until a stronger generation model is available. See `docs/decisions.md`.
 
 ## B. Answerable — requires synthesizing across 2+ documents
 
@@ -90,7 +95,7 @@ corpus. Flagging rather than faking results for them.
     **Expected:** Tests whether the system surfaces the current (amended) text as authoritative rather than confusing itself with the amendment-footnote apparatus stripped out during chunking (see `docs/decisions.md` — footnote text was deliberately removed from chunk bodies).
     **Source:** `patents_act_1970::sec-3`
 
-    *Note:* We don't yet have a genuine two-version conflict (e.g., an actually superseded rule with two different documents stating different rules). Need to construct one explicitly before Phase 5, or accept this category is thin given current corpus scope — flag to user rather than force a contrived example.
+    *Note:* We don't yet have a genuine two-version conflict (e.g., an actually superseded rule with two different documents stating different rules). Still true as of the 2026-09-13 corpus expansion — a real candidate pair existed (the Patents Rules, 2003 base text and the Patents (Amendment) Rules, 2024) but the only available mirror of the 2003 base text was a corrupted OCR scan and was rejected on quality grounds (see `corpus/manifest.md`). Need a clean source for one of these before this category stops being thin — flag to user rather than force a contrived example.
 
 ## E. Multilingual — BLOCKED, corpus is English-only
 
@@ -101,5 +106,5 @@ corpus. Flagging rather than faking results for them.
 
 ---
 
-**Count so far: 19 concrete + 5 reserved = 24, within PRD's 20-30 target.**
+**Count so far: 20 concrete + 5 reserved = 25, within PRD's 20-30 target.**
 **Still needed before Phase 6 can actually run:** Hindi corpus documents (category E), and a decision on whether to construct a synthetic version-conflict pair for category D or accept the corpus doesn't currently exercise that failure mode.

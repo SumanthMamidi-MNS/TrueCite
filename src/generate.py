@@ -135,7 +135,20 @@ def _build_passages_block(hits: list[dict]) -> str:
     # otherwise-correct, well-grounded claim (a real false-refusal cause, not
     # hypothetical — see docs/decisions.md). A bare integer is far less prone
     # to that kind of copy error.
-    return "\n".join(f"[{i}]\n{h['text']}\n" for i, h in enumerate(hits, start=1))
+    #
+    # Each passage is also labeled with its source document's short_name.
+    # Added after observing the model draft a claim about "the Toolkit" when
+    # asked about the WIPO GRATK Treaty — both documents are WIPO-published
+    # and discuss documenting/disclosing genetic-resources-related TK, and
+    # with passages given as bare unlabeled text the model conflated them
+    # even though the correct passage (the treaty's own disclosure article)
+    # was right there in the list. The label doesn't fix the model being
+    # wrong, but gives it an explicit anchor to tell same-topic documents
+    # apart, which a bare passage number can't.
+    return "\n".join(
+        f"[{i}] (Source: {get_authority(h['metadata']['doc_id'])['short_name']})\n{h['text']}\n"
+        for i, h in enumerate(hits, start=1)
+    )
 
 
 def _generate_draft_claims(query: str, hits: list[dict]) -> list[dict]:

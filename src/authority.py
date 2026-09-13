@@ -4,7 +4,7 @@ Hand-curated rather than regex-parsed from corpus/manifest.md's prose date
 column: several of those dates are genuinely ambiguous (see notes below), and
 guessing a single ISO date out of free text would be exactly the kind of
 silent guess this project's core design principle says not to make. Small
-enough (5 docs) that keeping this in sync with manifest.md by hand is low
+enough (7 docs) that keeping this in sync with manifest.md by hand is low
 risk; each entry's `date_note` records the actual source of the date so the
 reasoning is checkable later, not just the number.
 
@@ -73,6 +73,31 @@ DOC_AUTHORITY: dict[str, dict] = {
         "date_precision": "day",
         "date_note": "Date printed directly on the release itself.",
         "source_url": "https://www.pib.gov.in/newsite/printrelease.aspx?relid=98021",
+    },
+    "biological_diversity_act_2002": {
+        "short_name": "Biological Diversity Act, 2002",
+        "title": "The Biological Diversity Act, 2002 (No. 18 of 2003)",
+        "authority_level": AUTH_LEVEL_ACT,
+        "effective_date": "2003-02-05",
+        "date_precision": "day",
+        "date_note": "Date of Presidential assent, printed on the Act itself. Different sections actually "
+        "commenced on different later dates (1 October 2003 and 1 July 2004, per secondary sources) — "
+        "assent date is used here, consistent with how this project already uses a single "
+        "representative date per document rather than per-section commencement dates.",
+        "source_url": "https://hpbiodiversity.gov.in/BMC/BiodiverstyAct2002english.pdf",
+    },
+    "wipo_gratk_treaty_2024": {
+        "short_name": "WIPO GRATK Treaty (2024, not yet in force)",
+        "title": "WIPO Treaty on Intellectual Property, Genetic Resources and Associated Traditional Knowledge",
+        "authority_level": AUTH_LEVEL_INFORMATIONAL,
+        "effective_date": "2024-05-24",
+        "date_precision": "day",
+        "date_note": "This is the ADOPTION date (printed on the treaty text itself), not an in-force date — "
+        "the treaty requires 15 ratifications/accessions to enter into force, which had not happened as "
+        "of this corpus's sourcing. Deliberately tagged Informational rather than Act despite being a "
+        "real treaty text, and the short_name says so explicitly, so it can never be cited as binding "
+        "Indian law ahead of Act/Guideline sources on the same point.",
+        "source_url": "https://www.wipo.int/edocs/mdocs/tk/en/gratk_dc/gratk_dc_7.pdf",
     },
 }
 

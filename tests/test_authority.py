@@ -6,6 +6,8 @@ EXPECTED_DOC_IDS = {
     "pib_faq_patents_traditional_ayurvedic_medicine_2013",
     "ipo_ayush_examination_guidelines_2025",
     "wipo_documenting_tk_toolkit",
+    "biological_diversity_act_2002",
+    "wipo_gratk_treaty_2024",
 }
 
 

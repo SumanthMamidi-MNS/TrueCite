@@ -29,6 +29,8 @@ ALL_DOCS = [
         "wipo_documenting_tk_toolkit.pdf",
         "Documenting traditional knowledge (TK) is now widely",  # cut before a mid-sentence line wrap
     ),
+    ("biological_diversity_act_2002", "biological_diversity_act_2002.pdf", "BE it enacted by parliament"),
+    ("wipo_gratk_treaty_2024", "wipo_gratk_treaty_2024.pdf", None),
 ]
 
 
