@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from authority import DOC_AUTHORITY  # noqa: E402
 from generate import GENERATION_MODEL, MAX_HISTORY_TURNS, answer_query_streaming  # noqa: E402
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -83,9 +84,11 @@ def ask(q: str, history: str = "[]"):
 
 @app.get("/api/config")
 def config():
-    """What the UI's model badge shows — reads the same env-driven constant
-    the pipeline itself uses, so the two can never say different things."""
-    return {"model": GENERATION_MODEL, "provider": "ollama"}
+    """What the UI's sidebar reads for its model badge and corpus count —
+    both come from the pipeline's own source of truth (the env-driven model
+    constant, and authority.py's document registry) rather than being
+    hardcoded in the page, so neither can go stale as either one changes."""
+    return {"model": GENERATION_MODEL, "provider": "ollama", "corpus_docs": len(DOC_AUTHORITY)}
 
 
 @app.get("/")

@@ -469,15 +469,18 @@ function formatModelName(raw) {
 }
 
 async function loadModelBadge() {
-  const el = $("#model-name");
+  const modelEl = $("#model-name");
+  const corpusEl = $("#corpus-count");
   try {
     const res = await fetch("/api/config");
     if (!res.ok) throw new Error(String(res.status));
-    const { model, provider } = await res.json();
-    el.textContent = `${formatModelName(model)} · local (${provider === "ollama" ? "Ollama" : provider})`;
+    const { model, provider, corpus_docs } = await res.json();
+    modelEl.textContent = `${formatModelName(model)} · local (${provider === "ollama" ? "Ollama" : provider})`;
+    corpusEl.textContent = `${corpus_docs} primary source${corpus_docs === 1 ? "" : "s"} indexed`;
   } catch {
-    el.textContent = "Model unavailable — is the server running?";
+    modelEl.textContent = "Model unavailable — is the server running?";
     $("#model-note .dot-model")?.classList.add("down");
+    corpusEl.textContent = "Corpus status unavailable";
   }
 }
 
