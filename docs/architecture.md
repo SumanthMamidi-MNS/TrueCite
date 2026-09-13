@@ -5,7 +5,8 @@
 - Framework(s): none yet (CLI scripts only).
 - Database: ChromaDB (local, embedded, persisted to `corpus/chroma_db/`) — chosen over Qdrant despite Qdrant already running in the user's Docker Desktop; see `docs/decisions.md`.
 - LLM (Layer 2 verification + generation): local Ollama, Qwen 2.5 7B — **temporary substitution** for the Claude API the PRD specifies (§7), since no Anthropic API key is configured yet. Revisit once one exists; see `docs/decisions.md`.
-- Key libraries: `pypdf` (PDF text extraction), `sentence-transformers` (BAAI/bge-m3 embeddings), `chromadb`, `rank-bm25`, `requests` (Ollama HTTP API), `pytest`.
+- Web UI: FastAPI + uvicorn serving a hand-written HTML/CSS/JS front end in `web/` (no build step, no framework). Replaced the original Streamlit app — see `docs/decisions.md`.
+- Key libraries: `pypdf` (PDF text extraction), `sentence-transformers` (BAAI/bge-m3 embeddings), `chromadb`, `rank-bm25`, `requests` (Ollama HTTP API), `fastapi`, `uvicorn`, `pytest`.
 
 ## Folder structure
 ```
@@ -27,11 +28,17 @@ src/
   confidence_gate.py     # Layer 1: retrieval-distance threshold gate
   verification.py        # Layer 2: claim-support verification (local Ollama, majority vote)
   citation.py             # Layer 3: format_citation + resolve_authority
-  generate.py              # end-to-end pipeline composing all of the above
+  generate.py              # end-to-end pipeline: answer_query_streaming (events) + answer_query (wrapper)
+  api.py                   # FastAPI app; /api/ask streams pipeline events as SSE, serves web/
+web/
+  index.html               # chat shell: sidebar history, thread, pinned composer
+  styles.css               # design system (tokens, stepper, motion, responsive)
+  app.js                   # SSE client, thread/persistence, verification rendering
   run_phase1.py   # Phase 1 gate script: parses+chunks all corpus docs, prints + saves output
   run_phase2.py   # Phase 2 gate script: builds the index, runs 5 hand-checked test queries
   run_phase3.py   # Phase 3 gate script: vector-only vs. hybrid on 15 test questions
   run_phase5.py   # Phase 5 gate script: 3 hand-checked end-to-end queries (manual, live LLM calls)
+  run_phase6.py   # Phase 6 gate script: the evaluation set, with metrics
 tests/            # pytest suite (46 tests): chunking, BM25, RRF fusion, authority, confidence gate,
                   # verification, citation, generate — all mocked where a live model would be needed
 requirements.txt
@@ -59,7 +66,25 @@ requirements.txt
 
 Not yet exercised: a genuine two-version conflicting-rule case to validate "surface the current version" against real corpus content (none exists in this corpus — see `docs/phases.md` Phase 5).
 
-`src/app.py` (Streamlit) is the minimal UI (Phase 7), a thin wrapper over `generate.answer_query`.
+### Web UI (Phase 7)
+
+`src/api.py` + `web/` replace the original Streamlit prototype. The UI is a chat
+application, because that's how the tool is actually used: an officer asks,
+reads, asks again, and returns the next day wanting the thread. Concretely —
+a sidebar of past consultations (persisted in `localStorage`), a scrolling
+thread, and a **composer pinned to the bottom** so answers never appear
+somewhere the user has to go hunting for.
+
+`generate.answer_query_streaming` yields one event per pipeline stage;
+`/api/ask` forwards them as server-sent events. The UI renders those as a live
+stepper *inside* the assistant's message — retrieval counts, the confidence
+gate's actual distance against its threshold, and a pass/fail verdict per
+claim as each one is checked — then collapses the whole thing into a single
+badge (`✓ Verified · 1 claim upheld · 1 source · 34.9s`) once it settles, so
+it reassures on first use without becoming clutter on the hundredth. The
+20-40s a local model takes becomes visible progress rather than a dead spinner.
+`answer_query` is now a thin wrapper that drains the same generator, so the
+gate scripts and tests are unaffected.
 
 ## Known limitations (see docs/decisions.md for full evidence)
 - **Retrieval vocabulary gap**: terse, negatively-framed statutory clauses (e.g. Patents Act §3(p), which never uses the word "patent") don't reliably rank highly against natural-language questions ("can X be patented?"), in neither vector nor BM25 nor hybrid. The system still returns substantively correct, citable answers from secondary sources discussing the same rule in fuller prose.
@@ -68,8 +93,10 @@ Not yet exercised: a genuine two-version conflicting-rule case to validate "surf
 
 ## Deployment / how it runs
 Local only, for now. Requires Ollama running locally with `qwen2.5:7b` pulled, in addition to the Python env. `python -m venv .venv` + `pip install -r requirements.txt`, then:
+- `uvicorn src.api:app --port 8000` — **the web UI** at http://localhost:8000 (first start is slow: it imports the embedding stack).
 - `python src/run_phase1.py` — parse + chunk the corpus.
 - `python src/run_phase2.py` — build the ChromaDB index, run 5 gate queries.
 - `python src/run_phase3.py` — vector-only vs. hybrid comparison.
 - `python src/run_phase5.py` — 3 end-to-end gate queries (live LLM calls, slow).
+- `python src/run_phase6.py` — the evaluation set, with metrics.
 - `python -m pytest tests/` — run the automated test suite (fast, all live-model calls mocked).

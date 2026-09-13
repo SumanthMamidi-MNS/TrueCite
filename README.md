@@ -88,14 +88,35 @@ pip install -r requirements.txt
 
 python src/run_phase1.py   # parse + chunk the corpus
 python src/run_phase2.py   # build the vector index, sanity-check retrieval
-python -m pytest tests/    # run the automated test suite (46 tests, all fast — no live model calls)
+
+uvicorn src.api:app --port 8000   # then open http://localhost:8000
 ```
 
-To ask a question directly:
+The first start is slow — it loads the embedding stack before serving.
+
+### The interface
+
+A consultation tool rather than a search box: a thread you can keep adding to,
+past consultations in the sidebar, and the composer pinned at the bottom.
+
+While an answer is being produced, the **verification pipeline runs visibly
+inside the reply** — passages retrieved, the confidence gate's actual distance
+against its 0.90 threshold, then a ✓/✗ verdict per claim as each is checked
+against the passage it cites. Once it settles, the whole thing collapses to a
+single badge (`✓ Verified · 1 claim upheld · 1 source · 34.9s`) that can be
+re-expanded. Citations are clickable and open the exact source passage, tagged
+with its authority tier and effective date; anything the system discarded is
+listed under "What this answer left out".
+
+To use the pipeline directly instead:
 ```python
 from generate import answer_query
 result = answer_query("Can traditional knowledge be patented in India?")
 print(result["answer"])
+```
+
+```bash
+python -m pytest tests/    # 46 tests, all fast — live model calls are mocked
 ```
 
 ## Known limitations

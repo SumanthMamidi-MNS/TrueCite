@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>IP-SAKTI Sahayak</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <!-- ───────── sidebar ───────── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="side-head">
+      <div class="brand">
+        <span class="mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
+            <path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z" />
+            <path d="m8.2 12.1 2.6 2.7 5-5.6" class="mark-check" />
+          </svg>
+        </span>
+        <span class="brand-text"><strong>IP&#8209;SAKTI</strong><span>Sahayak</span></span>
+      </div>
+      <button class="icon-btn side-close" id="side-close" aria-label="Close menu">&times;</button>
+    </div>
+
+    <button class="new-chat" id="new-chat">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      New consultation
+    </button>
+
+    <nav class="history" id="history" aria-label="Past consultations"></nav>
+
+    <div class="side-foot">
+      <div class="corpus-note">
+        <span class="dot"></span>5 primary sources indexed
+      </div>
+      <button class="link-btn" id="limits-link">Known limitations</button>
+    </div>
+  </aside>
+
+  <div class="scrim" id="scrim" hidden></div>
+
+  <!-- ───────── chat column ───────── -->
+  <main class="chat">
+    <header class="chat-head">
+      <button class="icon-btn side-open" id="side-open" aria-label="Open menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <div class="head-title">
+        <h1 id="chat-title">New consultation</h1>
+        <p class="head-sub">Ayurveda IP &amp; regulatory guidance · every claim verified against its source</p>
+      </div>
+      <span class="live-chip"><i></i>3&#8209;layer verification</span>
+    </header>
+
+    <div class="thread" id="thread">
+      <div class="empty" id="empty">
+        <h2 class="empty-title">Answers you can <em>check</em>.</h2>
+        <p class="empty-sub">
+          Ask about patentability, disclosure duties, or traditional-knowledge protection.
+          Every claim is verified against the passage it cites before you see it — and refused
+          outright when the corpus can't support it.
+        </p>
+        <div class="suggestions">
+          <button class="sugg" data-q="Can an invention that is essentially traditional knowledge be patented in India?">
+            <span class="sugg-k">Patentability</span>
+            Can traditional knowledge be patented in India?
+          </button>
+          <button class="sugg" data-q="What must a patent applicant do if their invention uses biological material sourced from India?">
+            <span class="sugg-k">Disclosure duty</span>
+            Duties when using Indian biological material
+          </button>
+          <button class="sugg" data-q="What happens if a patent applicant wrongly discloses the geographical origin of biological material used in their invention?">
+            <span class="sugg-k">Consequences</span>
+            Wrongly declared geographical origin — what follows?
+          </button>
+          <button class="sugg sugg-probe" data-q="What is the current government filing fee for a patent application in India?">
+            <span class="sugg-k">Watch it refuse</span>
+            A question the corpus can't actually answer
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="composer-wrap">
+      <form class="composer" id="composer">
+        <textarea id="q" rows="1" placeholder="Ask a question…  (Enter to send, Shift+Enter for a new line)"
+                  aria-label="Ask a question about Ayurveda IP or regulatory law"></textarea>
+        <button class="send" id="send" type="submit" aria-label="Send">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M5 12h13m-5-6 6 6-6 6"/></svg>
+        </button>
+      </form>
+      <p class="disclaimer">Guidance tool, not legal advice — verify against the primary source before acting.</p>
+    </div>
+  </main>
+</div>
+
+<!-- ───────── limitations modal ───────── -->
+<div class="modal" id="limits-modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="Known limitations">
+    <button class="modal-close" id="modal-close" aria-label="Close">&times;</button>
+    <h3>Known limitations</h3>
+    <ul>
+      <li><b>Local model substitution.</b> Verification and generation run on a local Qwen&nbsp;2.5&nbsp;7B via Ollama, not the Claude API this was scoped for. Measured cost: a 5/11 false-refusal rate on answerable evaluation questions.</li>
+      <li><b>Each question is answered independently.</b> Follow-ups aren't yet resolved against earlier turns — ask self-contained questions rather than “what about that one?”.</li>
+      <li><b>Statutory vocabulary gap.</b> Terse clauses (e.g. Patents Act §3(p), which never uses the word “patent”) rank poorly against natural-language questions, so an answer may come from a secondary source explaining the same rule.</li>
+      <li><b>English-only corpus.</b> Hindi retrieval is unverified — no Hindi source documents yet.</li>
+      <li><b>Not production-scale.</b> Single user, local only.</li>
+    </ul>
+    <p class="modal-foot">Unanswerable questions: 5/5 correctly refused, 0 false answers.</p>
+  </div>
+</div>
+
+<!-- ───────── templates ───────── -->
+<template id="tpl-pipeline">
+  <div class="verify">
+    <button class="verify-summary" type="button" hidden>
+      <span class="vs-icon"></span>
+      <span class="vs-text"></span>
+      <span class="caret">›</span>
+    </button>
+    <div class="verify-body">
+      <div class="verify-head">
+        <span class="vh-label">Verifying</span>
+        <span class="vh-time" data-elapsed>0.0s</span>
+      </div>
+      <ol class="steps">
+        <li class="step" data-step="retrieval">
+          <span class="node"><i class="dot"></i></span>
+          <div><p class="step-name">Retrieve</p><p class="step-detail" data-detail>Dense vectors + BM25 keywords</p></div>
+        </li>
+        <li class="step" data-step="gate">
+          <span class="node"><i class="dot"></i></span>
+          <div>
+            <p class="step-name">Confidence gate <span class="layer-tag">L1</span></p>
+            <p class="step-detail" data-detail>Refuse if nothing clears the threshold</p>
+            <div class="gauge" data-gauge hidden>
+              <div class="gauge-track"><div class="gauge-fill" data-gauge-fill></div><div class="gauge-mark"></div></div>
+              <div class="gauge-legend"><span>best <b data-gauge-value>—</b></span><span>limit <b data-gauge-threshold>0.90</b></span></div>
+            </div>
+          </div>
+        </li>
+        <li class="step" data-step="generation">
+          <span class="node"><i class="dot"></i></span>
+          <div><p class="step-name">Draft claims</p><p class="step-detail" data-detail>Each bound to one passage</p></div>
+        </li>
+        <li class="step" data-step="verification">
+          <span class="node"><i class="dot"></i></span>
+          <div>
+            <p class="step-name">Verify each claim <span class="layer-tag">L2</span></p>
+            <p class="step-detail" data-detail>Does the cited passage actually support it?</p>
+            <ul class="claim-checks" data-checks></ul>
+          </div>
+        </li>
+        <li class="step" data-step="cite">
+          <span class="node"><i class="dot"></i></span>
+          <div><p class="step-name">Cite <span class="layer-tag">L3</span></p><p class="step-detail" data-detail>Act &gt; Guideline &gt; Informational</p></div>
+        </li>
+      </ol>
+    </div>
+  </div>
+</template>
+
+<script src="/app.js"></script>
+</body>
+</html>

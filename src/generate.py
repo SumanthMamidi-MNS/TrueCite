@@ -29,8 +29,9 @@ import json
 
 import requests
 
+from authority import get_authority
 from citation import format_citation, resolve_authority
-from confidence_gate import passes_confidence_gate
+from confidence_gate import CONFIDENCE_THRESHOLD, passes_confidence_gate
 from hybrid_retrieval import retrieve_hybrid
 from retrieval import retrieve as retrieve_vector
 from verification import verify_claim
@@ -60,13 +61,26 @@ If the passages don't actually answer the question, return {{"claims": []}}.
 """
 
 
-def _select_grounded_hits(query: str, top_k: int) -> list[dict]:
-    """Layer 1 gate (on vector distance) + hybrid ordering + authority ordering,
-    composed into the final candidate list handed to generation."""
+def _select_grounded_hits_with_diagnostics(query: str, top_k: int) -> tuple[list[dict], dict]:
+    """Layer 1 gate (on vector distance) + hybrid ordering + authority ordering.
+
+    Returns (hits, diagnostics). The diagnostics are what the UI's pipeline
+    view reports (candidate counts, the best distance actually seen vs. the
+    threshold) — the selection logic itself is unchanged.
+    """
     vector_hits = retrieve_vector(query, top_k=CANDIDATE_K)
+    best_distance = vector_hits[0]["distance"] if vector_hits else None
+    diagnostics = {
+        "candidates_examined": len(vector_hits),
+        "best_distance": best_distance,
+        "threshold": CONFIDENCE_THRESHOLD,
+        "gate_passed": False,
+    }
     if not passes_confidence_gate(vector_hits):
-        return []
-    confident_ids = {h["chunk_id"] for h in vector_hits if h["distance"] <= 0.90}
+        return [], diagnostics
+    diagnostics["gate_passed"] = True
+    confident_ids = {h["chunk_id"] for h in vector_hits if h["distance"] <= CONFIDENCE_THRESHOLD}
+    diagnostics["confident_candidates"] = len(confident_ids)
 
     hybrid_hits = retrieve_hybrid(query, top_k=CANDIDATE_K)
     candidates = [h for h in hybrid_hits if h["chunk_id"] in confident_ids]
@@ -88,7 +102,12 @@ def _select_grounded_hits(query: str, top_k: int) -> list[dict]:
     doc_ids_present = list({h["metadata"]["doc_id"] for h in top_candidates})
     authority_order = resolve_authority(doc_ids_present)
     top_candidates.sort(key=lambda h: authority_order.index(h["metadata"]["doc_id"]))
-    return top_candidates
+    return top_candidates, diagnostics
+
+
+def _select_grounded_hits(query: str, top_k: int) -> list[dict]:
+    hits, _ = _select_grounded_hits_with_diagnostics(query, top_k)
+    return hits
 
 
 def _build_passages_block(hits: list[dict]) -> str:
@@ -119,50 +138,163 @@ def _generate_draft_claims(query: str, hits: list[dict]) -> list[dict]:
     return claims
 
 
-def _refusal() -> dict:
-    return {"refused": True, "answer": REFUSAL_MESSAGE, "citations": [], "claims": []}
+def _refusal(stage: str = "verification") -> dict:
+    return {
+        "refused": True,
+        "refusal_stage": stage,
+        "answer": REFUSAL_MESSAGE,
+        "citations": [],
+        "claims": [],
+        "discarded": [],
+    }
+
+
+def _describe_source(hit: dict, index: int) -> dict:
+    """Flatten a retrieved hit into what the UI's source rail needs."""
+    doc_id = hit["metadata"]["doc_id"]
+    meta = get_authority(doc_id)
+    return {
+        "index": index,
+        "chunk_id": hit["chunk_id"],
+        "doc_id": doc_id,
+        "short_name": meta["short_name"],
+        "authority_level": meta["authority_level"],
+        "effective_date": meta["effective_date"],
+        "section_number": hit["metadata"].get("section_number") or "",
+        "heading": hit["metadata"].get("heading") or "",
+        "text": hit["text"],
+    }
+
+
+def answer_query_streaming(query: str, top_k: int = 8):
+    """Run the pipeline, yielding an event per stage as it happens.
+
+    Same logic as answer_query (which is now a thin wrapper that drains this),
+    but observable: the UI renders each layer's decision live rather than
+    showing a spinner for the 20-40s a local model takes. Every event is a
+    plain dict, JSON-serializable as-is.
+    """
+    yield {"type": "stage", "stage": "retrieval", "status": "start"}
+    hits, diag = _select_grounded_hits_with_diagnostics(query, top_k)
+    yield {
+        "type": "stage",
+        "stage": "retrieval",
+        "status": "done",
+        "meta": {"candidates_examined": diag["candidates_examined"], "selected": len(hits)},
+    }
+    yield {
+        "type": "stage",
+        "stage": "gate",
+        "status": "done",
+        "meta": {
+            "passed": diag["gate_passed"],
+            "best_distance": diag["best_distance"],
+            "threshold": diag["threshold"],
+        },
+    }
+
+    if not hits:
+        yield {"type": "refused", "refusal_stage": "gate", "result": _refusal("gate")}
+        return
+
+    sources = [_describe_source(h, i) for i, h in enumerate(hits, start=1)]
+    yield {"type": "sources", "sources": sources}
+
+    yield {"type": "stage", "stage": "generation", "status": "start"}
+    draft_claims = _generate_draft_claims(query, hits)
+    yield {
+        "type": "stage",
+        "stage": "generation",
+        "status": "done",
+        "meta": {"drafted": len(draft_claims)},
+    }
+
+    yield {"type": "stage", "stage": "verification", "status": "start",
+           "meta": {"total": len(draft_claims)}}
+
+    verified_claims, discarded_claims = [], []
+    for i, claim in enumerate(draft_claims):
+        source_num = claim.get("source")
+        if not isinstance(source_num, int) or not (1 <= source_num <= len(hits)):
+            # generation cited a passage number we didn't actually give it
+            discarded_claims.append(
+                {"text": claim.get("text", ""), "reason": "cited a source that wasn't provided"}
+            )
+            continue
+        chunk = hits[source_num - 1]
+
+        yield {
+            "type": "claim",
+            "index": i,
+            "text": claim["text"],
+            "source_index": source_num,
+            "status": "verifying",
+        }
+
+        try:
+            verdict = verify_claim(claim["text"], chunk["text"])
+        except (ValueError, requests.RequestException) as exc:
+            # fail closed: an unverifiable claim is dropped, not kept
+            discarded_claims.append(
+                {"text": claim["text"], "reason": f"verification unavailable ({type(exc).__name__})"}
+            )
+            yield {
+                "type": "claim_result",
+                "index": i,
+                "supported": False,
+                "reasoning": "Verification could not be completed, so this claim was dropped.",
+                "votes": [],
+            }
+            continue
+
+        if verdict["supported"]:
+            enriched = {
+                **claim,
+                "chunk_id": chunk["chunk_id"],
+                "doc_id": chunk["metadata"]["doc_id"],
+                "section_number": chunk["metadata"].get("section_number"),
+            }
+            enriched["citation"] = format_citation(
+                enriched["doc_id"], enriched["section_number"]
+            )
+            verified_claims.append(enriched)
+        else:
+            discarded_claims.append({"text": claim["text"], "reason": verdict["reasoning"]})
+
+        yield {
+            "type": "claim_result",
+            "index": i,
+            "supported": verdict["supported"],
+            "reasoning": verdict["reasoning"],
+            "votes": verdict.get("votes", []),
+            "citation": format_citation(
+                chunk["metadata"]["doc_id"], chunk["metadata"].get("section_number")
+            )
+            if verdict["supported"]
+            else None,
+            "source_index": source_num,
+        }
+
+    if not verified_claims:
+        result = _refusal("verification")
+        result["discarded"] = discarded_claims
+        yield {"type": "refused", "refusal_stage": "verification", "result": result}
+        return
+
+    result = {
+        "refused": False,
+        "refusal_stage": None,
+        "answer": "\n".join(f"{c['text']} {c['citation']}" for c in verified_claims),
+        "citations": [c["citation"] for c in verified_claims],
+        "claims": verified_claims,
+        "discarded": discarded_claims,
+    }
+    yield {"type": "complete", "result": result}
 
 
 def answer_query(query: str, top_k: int = 8) -> dict:
     """Returns {"refused": bool, "answer": str, "citations": list[str], "claims": list[dict]}."""
-    hits = _select_grounded_hits(query, top_k)
-    if not hits:
-        return _refusal()
-
-    draft_claims = _generate_draft_claims(query, hits)
-
-    verified_claims = []
-    for claim in draft_claims:
-        source_num = claim.get("source")
-        if not isinstance(source_num, int) or not (1 <= source_num <= len(hits)):
-            continue  # generation cited a passage number we didn't actually give it
-        chunk = hits[source_num - 1]
-        try:
-            verdict = verify_claim(claim["text"], chunk["text"])
-        except (ValueError, requests.RequestException):
-            continue  # fail closed: an unverifiable claim is dropped, not kept
-        if verdict["supported"]:
-            verified_claims.append(
-                {
-                    **claim,
-                    "chunk_id": chunk["chunk_id"],
-                    "doc_id": chunk["metadata"]["doc_id"],
-                    "section_number": chunk["metadata"].get("section_number"),
-                }
-            )
-
-    if not verified_claims:
-        return _refusal()
-
-    answer_lines, citations = [], []
-    for c in verified_claims:
-        cite = format_citation(c["doc_id"], c["section_number"])
-        answer_lines.append(f"{c['text']} {cite}")
-        citations.append(cite)
-
-    return {
-        "refused": False,
-        "answer": "\n".join(answer_lines),
-        "citations": citations,
-        "claims": verified_claims,
-    }
+    for event in answer_query_streaming(query, top_k):
+        if event["type"] in ("complete", "refused"):
+            return event["result"]
+    return _refusal("verification")
