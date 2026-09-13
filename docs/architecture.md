@@ -86,6 +86,22 @@ it reassures on first use without becoming clutter on the hundredth. The
 `answer_query` is now a thin wrapper that drains the same generator, so the
 gate scripts and tests are unaffected.
 
+**Follow-up questions**: `/api/ask` accepts an optional `history` query param
+(JSON-encoded `[{"q","a"}]`, last 3 turns — `EventSource` only supports GET,
+so it can't ride in a request body). When present, `answer_query_streaming`
+runs one extra step first — `generate._condense_followup` — that asks the
+local LLM to rewrite the follow-up into a standalone question using that
+history, shown live as an "Understand follow-up" pipeline step. Only the
+*query* is rewritten; retrieval, generation, and verification still see only
+corpus passages, never conversation text, so a bad rewrite can only mis-target
+retrieval (which Layer 1/2 still catch) and can never itself become an
+ungrounded claim. Fails open to the original question on any error.
+
+**Model configuration**: `generate.GENERATION_MODEL` and `verification.MODEL`
+both read the `OLLAMA_MODEL` environment variable (default `qwen2.5:7b`)
+instead of being hardcoded, and `/api/config` exposes the active value so the
+UI's sidebar model badge always reflects whatever is actually configured.
+
 ## Known limitations (see docs/decisions.md for full evidence)
 - **Retrieval vocabulary gap**: terse, negatively-framed statutory clauses (e.g. Patents Act §3(p), which never uses the word "patent") don't reliably rank highly against natural-language questions ("can X be patented?"), in neither vector nor BM25 nor hybrid. The system still returns substantively correct, citable answers from secondary sources discussing the same rule in fuller prose.
 - **Local LLM reliability**: Qwen 2.5 7B (standing in for the Claude API) is non-deterministic on borderline claim-verification judgments — mitigated with majority-vote verification, not eliminated. Revisit once an Anthropic API key is available.

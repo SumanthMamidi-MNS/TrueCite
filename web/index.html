@@ -39,6 +39,9 @@
       <div class="corpus-note">
         <span class="dot"></span>5 primary sources indexed
       </div>
+      <div class="corpus-note model-note" id="model-note" title="Set via the OLLAMA_MODEL environment variable">
+        <span class="dot dot-model"></span><span id="model-name">Checking model…</span>
+      </div>
       <button class="link-btn" id="limits-link">Known limitations</button>
     </div>
   </aside>
@@ -79,6 +82,10 @@
             <span class="sugg-k">Consequences</span>
             Wrongly declared geographical origin — what follows?
           </button>
+          <button class="sugg" data-q="What should be included when documenting traditional knowledge so it can be used effectively in prior-art patent searches?">
+            <span class="sugg-k">Documentation</span>
+            What good TK documentation should include
+          </button>
           <button class="sugg sugg-probe" data-q="What is the current government filing fee for a patent application in India?">
             <span class="sugg-k">Watch it refuse</span>
             A question the corpus can't actually answer
@@ -89,12 +96,13 @@
 
     <div class="composer-wrap">
       <form class="composer" id="composer">
-        <textarea id="q" rows="1" placeholder="Ask a question…  (Enter to send, Shift+Enter for a new line)"
+        <textarea id="q" rows="1" placeholder="Ask about patentability, disclosure duties, or traditional-knowledge protection…"
                   aria-label="Ask a question about Ayurveda IP or regulatory law"></textarea>
         <button class="send" id="send" type="submit" aria-label="Send">
           <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M5 12h13m-5-6 6 6-6 6"/></svg>
         </button>
       </form>
+      <p class="hint">Enter to send · Shift+Enter for a new line</p>
       <p class="disclaimer">Guidance tool, not legal advice — verify against the primary source before acting.</p>
     </div>
   </main>
@@ -107,7 +115,7 @@
     <h3>Known limitations</h3>
     <ul>
       <li><b>Local model substitution.</b> Verification and generation run on a local Qwen&nbsp;2.5&nbsp;7B via Ollama, not the Claude API this was scoped for. Measured cost: a 5/11 false-refusal rate on answerable evaluation questions.</li>
-      <li><b>Each question is answered independently.</b> Follow-ups aren't yet resolved against earlier turns — ask self-contained questions rather than “what about that one?”.</li>
+      <li><b>Follow-up resolution is best-effort.</b> The last 3 turns are used to rewrite a follow-up (e.g. “what about for Unani?”) into a standalone question before retrieval — shown as an “Understand follow-up” step. The rewrite itself isn't verified the way answers are, so if it misreads what you meant, rephrase the question fully rather than continuing to build on it.</li>
       <li><b>Statutory vocabulary gap.</b> Terse clauses (e.g. Patents Act §3(p), which never uses the word “patent”) rank poorly against natural-language questions, so an answer may come from a secondary source explaining the same rule.</li>
       <li><b>English-only corpus.</b> Hindi retrieval is unverified — no Hindi source documents yet.</li>
       <li><b>Not production-scale.</b> Single user, local only.</li>
@@ -130,6 +138,10 @@
         <span class="vh-time" data-elapsed>0.0s</span>
       </div>
       <ol class="steps">
+        <li class="step" data-step="condense" hidden>
+          <span class="node"><i class="dot"></i></span>
+          <div><p class="step-name">Understand follow&#8209;up</p><p class="step-detail" data-detail>Resolving context from earlier in this conversation</p></div>
+        </li>
         <li class="step" data-step="retrieval">
           <span class="node"><i class="dot"></i></span>
           <div><p class="step-name">Retrieve</p><p class="step-detail" data-detail>Dense vectors + BM25 keywords</p></div>

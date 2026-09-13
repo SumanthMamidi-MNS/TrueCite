@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from generate import answer_query_streaming  # noqa: E402  (needs the path insert above)
+from generate import GENERATION_MODEL, MAX_HISTORY_TURNS, answer_query_streaming  # noqa: E402
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
@@ -32,18 +32,44 @@ def _sse(event: dict) -> str:
     return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
 
+def _parse_history(raw: str) -> list[dict]:
+    """Decode the `history` query param into the [{"q":.., "a":..}] shape
+    generate.py expects, dropping anything malformed rather than erroring —
+    a client-sent history is a convenience for follow-ups, never load-bearing
+    (a bad or missing one just means the question is treated as standalone).
+    """
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if not isinstance(data, list):
+        return []
+    turns = [
+        {"q": t["q"], "a": t["a"]}
+        for t in data
+        if isinstance(t, dict) and isinstance(t.get("q"), str) and isinstance(t.get("a"), str)
+    ]
+    return turns[-MAX_HISTORY_TURNS:]
+
+
 @app.get("/api/ask")
-def ask(q: str):
+def ask(q: str, history: str = "[]"):
     """Stream pipeline events for a question as server-sent events.
 
     Declared `def` (not `async def`) on purpose: the pipeline is blocking
     (embedding lookups and local-LLM HTTP calls), so FastAPI runs it in a
     worker thread rather than stalling the event loop.
+
+    `history` is the last few turns of the current conversation, JSON-encoded
+    in the query string (EventSource only supports GET, so it can't ride in
+    a request body) — used solely to resolve follow-up questions, see
+    generate.answer_query_streaming.
     """
+    turns = _parse_history(history)
 
     def event_stream():
         try:
-            for event in answer_query_streaming(q):
+            for event in answer_query_streaming(q, history=turns):
                 yield _sse(event)
         except Exception as exc:  # surface failures to the UI instead of a dead stream
             yield _sse({"type": "error", "message": f"{type(exc).__name__}: {exc}"})
@@ -53,6 +79,13 @@ def ask(q: str):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.get("/api/config")
+def config():
+    """What the UI's model badge shows — reads the same env-driven constant
+    the pipeline itself uses, so the two can never say different things."""
+    return {"model": GENERATION_MODEL, "provider": "ollama"}
 
 
 @app.get("/")

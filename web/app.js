@@ -291,11 +291,29 @@ function ask(question) {
   let drafted = 0;
   let sources = [];
 
-  setStep("retrieval", "active");
-  stream = new EventSource(`/api/ask?q=${encodeURIComponent(question)}`);
+  // Last few turns of THIS conversation, sent so a follow-up ("what about
+  // for Unani?") can be rewritten into a standalone question before
+  // retrieval — see generate._condense_followup. Empty on a fresh
+  // conversation's first question, so nothing changes for a one-off ask.
+  const historyPayload = conv.turns.slice(-3).map((t) => ({ q: t.q, a: t.result.answer }));
+  const hasHistory = historyPayload.length > 0;
+  if (hasHistory) $('.step[data-step="condense"]', verify).hidden = false;
+  setStep(hasHistory ? "condense" : "retrieval", "active");
+
+  const historyParam = hasHistory ? `&history=${encodeURIComponent(JSON.stringify(historyPayload))}` : "";
+  stream = new EventSource(`/api/ask?q=${encodeURIComponent(question)}${historyParam}`);
 
   stream.onmessage = (m) => {
     const ev = JSON.parse(m.data);
+
+    if (ev.type === "stage" && ev.stage === "condense" && ev.status === "done") {
+      setStep("condense", "done",
+        ev.meta.rewritten ? `Interpreted as: “${ev.meta.standalone_question}”` : "Already a standalone question");
+    }
+
+    if (ev.type === "stage" && ev.stage === "retrieval" && ev.status === "start") {
+      setStep("retrieval", "active");
+    }
 
     if (ev.type === "stage" && ev.stage === "retrieval" && ev.status === "done") {
       setStep("retrieval", "done", `${ev.meta.candidates_examined} passages examined · ${ev.meta.selected} carried forward`);
@@ -434,6 +452,35 @@ function countUp(el, to, decimals = 3, ms = 700) {
   requestAnimationFrame(tick);
 }
 
+/* ───────── model badge ───────── */
+
+const KNOWN_MODEL_NAMES = {
+  "qwen2.5:7b": "Qwen 2.5 7B",
+  "llama3.1:8b": "Llama 3.1 8B",
+  "gemma2:2b": "Gemma 2 2B",
+};
+
+function formatModelName(raw) {
+  if (KNOWN_MODEL_NAMES[raw]) return KNOWN_MODEL_NAMES[raw];
+  // Unrecognized model id — fall back to a readable guess rather than a
+  // hardcoded name, so an operator swapping OLLAMA_MODEL always sees
+  // *something* accurate instead of a stale label.
+  return raw.replace(/[:_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+async function loadModelBadge() {
+  const el = $("#model-name");
+  try {
+    const res = await fetch("/api/config");
+    if (!res.ok) throw new Error(String(res.status));
+    const { model, provider } = await res.json();
+    el.textContent = `${formatModelName(model)} · local (${provider === "ollama" ? "Ollama" : provider})`;
+  } catch {
+    el.textContent = "Model unavailable — is the server running?";
+    $("#model-note .dot-model")?.classList.add("down");
+  }
+}
+
 /* ───────── wiring ───────── */
 
 function autoGrow() {
@@ -482,4 +529,5 @@ document.addEventListener("keydown", (e) => {
 });
 
 renderHistory();
+loadModelBadge();
 input.focus();

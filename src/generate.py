@@ -26,6 +26,7 @@ docstring — no Anthropic API key configured yet, same temporary substitution
 for the Claude API the PRD specifies for generation).
 """
 import json
+import os
 
 import requests
 
@@ -37,8 +38,13 @@ from retrieval import retrieve as retrieve_vector
 from verification import verify_claim
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-GENERATION_MODEL = "qwen2.5:7b"
+# Read from the environment so swapping the local model (or, eventually, a
+# real Anthropic API key) doesn't require a code change anywhere the model
+# name is used — the UI's model badge (see api.py's /api/config) reads the
+# same value, so it can never drift out of sync with what's actually running.
+GENERATION_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
 CANDIDATE_K = 40
+MAX_HISTORY_TURNS = 3
 
 REFUSAL_MESSAGE = (
     "I don't have enough grounded information in the corpus to answer this "
@@ -58,6 +64,17 @@ Respond with ONLY a JSON object in this exact format, no other text:
 {{"claims": [{{"text": "a single factual claim, in your own words but strictly grounded in one passage", "source": <the passage NUMBER it's based on, e.g. 1>}}]}}
 
 If the passages don't actually answer the question, return {{"claims": []}}.
+"""
+
+CONDENSE_PROMPT_TEMPLATE = """Rewrite the follow-up question below as a standalone question that includes whatever context it depends on from the conversation so far — do not answer it, only rewrite it. If it is already standalone, return it unchanged. Do not invent facts that weren't in the conversation.
+
+Conversation so far:
+{history_block}
+
+Follow-up question: {query}
+
+Respond with ONLY a JSON object in this exact format, no other text:
+{{"standalone_question": "the rewritten question"}}
 """
 
 
@@ -138,6 +155,36 @@ def _generate_draft_claims(query: str, hits: list[dict]) -> list[dict]:
     return claims
 
 
+def _format_history(history: list[dict]) -> str:
+    return "\n".join(f"Q: {turn['q']}\nA: {turn['a']}" for turn in history)
+
+
+def _condense_followup(query: str, history: list[dict]) -> str:
+    """Rewrite a follow-up into a standalone question using recent turns.
+
+    Only the *query* is rewritten — retrieval, generation, and verification
+    still ground strictly in corpus passages, never in conversation history,
+    so this can't introduce an ungrounded claim; the worst case is a bad
+    rewrite that retrieves the wrong passages, which Layer 1/2 still catch.
+    Fails open to the original query on any error (see call site) rather
+    than blocking the whole answer on a single extra LLM call.
+    """
+    prompt = CONDENSE_PROMPT_TEMPLATE.format(
+        history_block=_format_history(history), query=query
+    )
+    response = requests.post(
+        OLLAMA_URL,
+        json={"model": GENERATION_MODEL, "prompt": prompt, "stream": False, "format": "json"},
+        timeout=60,
+    )
+    response.raise_for_status()
+    result = json.loads(response.json()["response"])
+    standalone = result.get("standalone_question")
+    if not isinstance(standalone, str) or not standalone.strip():
+        raise ValueError(f"malformed condense response: {result!r}")
+    return standalone.strip()
+
+
 def _refusal(stage: str = "verification") -> dict:
     return {
         "refused": True,
@@ -166,16 +213,39 @@ def _describe_source(hit: dict, index: int) -> dict:
     }
 
 
-def answer_query_streaming(query: str, top_k: int = 8):
+def answer_query_streaming(query: str, top_k: int = 8, history: list[dict] | None = None):
     """Run the pipeline, yielding an event per stage as it happens.
 
     Same logic as answer_query (which is now a thin wrapper that drains this),
     but observable: the UI renders each layer's decision live rather than
     showing a spinner for the 20-40s a local model takes. Every event is a
     plain dict, JSON-serializable as-is.
+
+    `history` is the last few (q, a) turns of the current conversation, used
+    ONLY to rewrite a follow-up into a standalone question before retrieval
+    (see `_condense_followup`) — it never reaches generation or verification
+    directly, so a follow-up still can't be answered from anything but the
+    corpus.
     """
+    effective_query = query
+    if history:
+        yield {"type": "stage", "stage": "condense", "status": "start"}
+        try:
+            effective_query = _condense_followup(query, history[-MAX_HISTORY_TURNS:])
+        except (ValueError, requests.RequestException):
+            effective_query = query
+        yield {
+            "type": "stage",
+            "stage": "condense",
+            "status": "done",
+            "meta": {
+                "standalone_question": effective_query,
+                "rewritten": effective_query != query,
+            },
+        }
+
     yield {"type": "stage", "stage": "retrieval", "status": "start"}
-    hits, diag = _select_grounded_hits_with_diagnostics(query, top_k)
+    hits, diag = _select_grounded_hits_with_diagnostics(effective_query, top_k)
     yield {
         "type": "stage",
         "stage": "retrieval",
@@ -201,7 +271,7 @@ def answer_query_streaming(query: str, top_k: int = 8):
     yield {"type": "sources", "sources": sources}
 
     yield {"type": "stage", "stage": "generation", "status": "start"}
-    draft_claims = _generate_draft_claims(query, hits)
+    draft_claims = _generate_draft_claims(effective_query, hits)
     yield {
         "type": "stage",
         "stage": "generation",
@@ -292,9 +362,9 @@ def answer_query_streaming(query: str, top_k: int = 8):
     yield {"type": "complete", "result": result}
 
 
-def answer_query(query: str, top_k: int = 8) -> dict:
+def answer_query(query: str, top_k: int = 8, history: list[dict] | None = None) -> dict:
     """Returns {"refused": bool, "answer": str, "citations": list[str], "claims": list[dict]}."""
-    for event in answer_query_streaming(query, top_k):
+    for event in answer_query_streaming(query, top_k, history=history):
         if event["type"] in ("complete", "refused"):
             return event["result"]
     return _refusal("verification")

@@ -94,6 +94,10 @@ uvicorn src.api:app --port 8000   # then open http://localhost:8000
 
 The first start is slow — it loads the embedding stack before serving.
 
+To use a different local Ollama model, set `OLLAMA_MODEL` before starting the
+server (e.g. `OLLAMA_MODEL=llama3.1:8b uvicorn src.api:app --port 8000`) — the
+UI's sidebar badge picks it up automatically, no code change needed.
+
 ### The interface
 
 A consultation tool rather than a search box: a thread you can keep adding to,
@@ -107,6 +111,15 @@ single badge (`✓ Verified · 1 claim upheld · 1 source · 34.9s`) that can be
 re-expanded. Citations are clickable and open the exact source passage, tagged
 with its authority tier and effective date; anything the system discarded is
 listed under "What this answer left out".
+
+A follow-up question ("what about for Unani specifically?") is rewritten into
+a standalone question from the last 3 turns before retrieval — shown as its
+own "Understand follow-up" step — but the rewrite itself is never verified,
+only the answer is, so a confusing follow-up may retrieve the wrong passages
+rather than the right ones (in which case the pipeline still refuses instead
+of guessing). The sidebar footer names the model actually running, read from
+the `OLLAMA_MODEL` environment variable, so it never goes stale if the model
+is swapped.
 
 To use the pipeline directly instead:
 ```python
@@ -135,6 +148,18 @@ discovered later by someone else:
   time in 3. Mitigated with majority-vote verification (3 calls, take the
   consensus), which measurably helped but doesn't guarantee determinism. A
   frontier model would likely need this less.
+- **Follow-up rewriting is best-effort, unverified.** The same local model
+  resolves a follow-up into a standalone question from the last 3 turns
+  (see "The interface" above); observed live on a genuinely ambiguous
+  follow-up, it produced a plausible but not necessarily intended reading of
+  an earlier turn. The rewrite is shown to the user but isn't itself checked
+  against anything — the safety net is that retrieval/verification still
+  only ground in the corpus, so a bad rewrite produces a refusal or a
+  differently-scoped answer, never a fabricated one.
+- **No table/comparison view.** Every claim is tied to exactly one source
+  passage (that's what makes Layer 2 possible); a comparison question gets a
+  claim list with per-source authority tiers rather than a table, since a
+  table cell doesn't have a single passage to verify it against.
 - **Local-model extraction quality.** Phase 6 measured a 5/11 false-refusal
   rate on answerable questions. The unanswerable side is clean (5/5 correct
   refusals, 0 false answers) — the failures are specifically the smaller

@@ -4,9 +4,18 @@ out (no live embedding model or Ollama server needed to run the suite).
 End-to-end behavior against the real pipeline was verified manually and is
 recorded in docs/decisions.md / docs/phases.md Phase 5.
 """
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from generate import _select_grounded_hits
+import pytest
+
+from generate import _condense_followup, _select_grounded_hits
+
+
+def _mock_response(response_json_str: str) -> MagicMock:
+    mock = MagicMock()
+    mock.json.return_value = {"response": response_json_str}
+    mock.raise_for_status.return_value = None
+    return mock
 
 
 def _hit(chunk_id, doc_id, distance=0.5, section_number=None):
@@ -72,3 +81,40 @@ def test_authority_ordering_still_applies_within_the_selected_top_k():
 
     result_ids = [h["chunk_id"] for h in result]
     assert result_ids.index("act_1") < result_ids.index("informational_1")
+
+
+def test_condense_followup_rewrites_using_history():
+    history = [{"q": "Can traditional knowledge be patented in India?", "a": "No, per §3(p)."}]
+    with patch("generate.requests.post", return_value=_mock_response(
+        '{"standalone_question": "Can traditional knowledge be patented in India for Unani medicine specifically?"}'
+    )) as mock_post:
+        result = _condense_followup("What about for Unani specifically?", history)
+    assert result == "Can traditional knowledge be patented in India for Unani medicine specifically?"
+    mock_post.assert_called_once()
+
+
+def test_condense_followup_raises_on_malformed_response_instead_of_defaulting():
+    # The caller (answer_query_streaming) is responsible for failing open to
+    # the original query — this function itself must not silently invent a
+    # fallback, for the same fail-closed reason verification.py raises.
+    history = [{"q": "earlier question", "a": "earlier answer"}]
+    with patch("generate.requests.post", return_value=_mock_response("not json at all")):
+        with pytest.raises(Exception):
+            _condense_followup("a follow-up", history)
+
+
+def test_streaming_falls_back_to_original_query_when_condense_fails():
+    # A broken condense call must not sink the whole answer — it should fall
+    # back to treating the question as standalone rather than erroring out.
+    history = [{"q": "earlier question", "a": "earlier answer"}]
+    bad_hits = [_hit("a", "patents_act_1970", distance=1.2)]
+    from generate import answer_query_streaming
+
+    with patch("generate.requests.post", return_value=_mock_response("not json at all")), \
+         patch("generate.retrieve_vector", return_value=bad_hits) as mock_vec:
+        events = list(answer_query_streaming("a follow-up question", history=history))
+
+    condense_done = next(e for e in events if e.get("stage") == "condense" and e["status"] == "done")
+    assert condense_done["meta"]["standalone_question"] == "a follow-up question"
+    assert condense_done["meta"]["rewritten"] is False
+    mock_vec.assert_called_once_with("a follow-up question", top_k=40)

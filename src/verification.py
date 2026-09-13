@@ -11,11 +11,14 @@ specifies for this layer — temporary substitution, no Anthropic API key is
 configured yet. See docs/decisions.md. Revisit once one exists.
 """
 import json
+import os
 
 import requests
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "qwen2.5:7b"
+# Same env var generate.py reads (OLLAMA_MODEL) so the whole pipeline — and
+# the UI's model badge, see api.py's /api/config — always names one model.
+MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
 
 VERIFICATION_PROMPT_TEMPLATE = """You are verifying whether a passage from a legal/regulatory document actually supports a specific claim. Read the ENTIRE passage first and resolve any pronouns or references (e.g. "these", "such", "the above") using earlier sentences in the SAME passage before judging — do not evaluate a later sentence in isolation from the sentence it depends on. Be strict about facts genuinely absent from the passage: a passage that is merely on the same topic, without actually stating or directly implying the claim, does NOT support it. In particular, a passage that only says something is "as prescribed" or "as may be determined" elsewhere does NOT support a claim that states a specific figure or detail.
 

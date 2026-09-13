@@ -153,11 +153,29 @@ Sequential, gated phases per PRD §9 — no fixed schedule. Each phase gates the
       numbers should be read as indicative, not exact.
 
 ## Phase 7 — Interface & Documentation — DONE
-- [x] `src/app.py`: minimal Streamlit UI (PRD §7) — question box, answer + citations,
-      known-limitations panel.
+- [x] First cut: `src/app.py`, a minimal Streamlit UI (PRD §7) — question box, answer +
+      citations, known-limitations panel. Superseded below.
+- [x] Rebuilt per user feedback ("I'm expecting a chatbot-type interface... how would a
+      department actually use this daily?"): replaced Streamlit with `src/api.py`
+      (FastAPI + SSE) serving a hand-written chat UI in `web/` — sidebar of past
+      consultations (localStorage), scrolling thread, composer pinned to the bottom, and
+      the verification pipeline running live inside each reply before collapsing to a
+      one-line badge. `src/app.py` deleted.
+- [x] Second feedback round: added follow-up resolution (`generate._condense_followup`
+      rewrites a follow-up into a standalone question from the last 3 turns before
+      retrieval — see docs/decisions.md for why this can't leak into generation/
+      verification), a dynamic model badge (`OLLAMA_MODEL` env var + `/api/config`, so
+      the UI never hardcodes what's running), a 5th suggestion chip, and clearer composer
+      copy. Considered and declined a table/comparison view (doesn't fit the per-claim
+      verification model — see decisions.md).
 - [x] `README.md`: architecture, the specific failure mode targeted (citation-real-but-
       unsupporting, per the 2025 Stanford/Magesh study), how to run it, and every known
       limitation found during testing (not discovered later by someone else).
+- [ ] Flagged, not built: the Biological Diversity Act 2002 is currently only referenced
+      secondhand through the 2012 IPO guideline, not indexed as its own primary source —
+      a real corpus gap found via live testing this session. Needs a user decision before
+      sourcing it (new document → chunking → re-index → re-eval is a real chunk of work,
+      not a quick add).
 
 ## Notes
 - No fixed calendar — move to the next phase only when the current one is verified working.
