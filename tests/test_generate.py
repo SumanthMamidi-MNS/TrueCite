@@ -85,7 +85,7 @@ def test_authority_ordering_still_applies_within_the_selected_top_k():
 
 def test_condense_followup_rewrites_using_history():
     history = [{"q": "Can traditional knowledge be patented in India?", "a": "No, per §3(p)."}]
-    with patch("generate.requests.post", return_value=_mock_response(
+    with patch("llm_client.requests.post", return_value=_mock_response(
         '{"standalone_question": "Can traditional knowledge be patented in India for Unani medicine specifically?"}'
     )) as mock_post:
         result = _condense_followup("What about for Unani specifically?", history)
@@ -98,7 +98,7 @@ def test_condense_followup_raises_on_malformed_response_instead_of_defaulting():
     # the original query — this function itself must not silently invent a
     # fallback, for the same fail-closed reason verification.py raises.
     history = [{"q": "earlier question", "a": "earlier answer"}]
-    with patch("generate.requests.post", return_value=_mock_response("not json at all")):
+    with patch("llm_client.requests.post", return_value=_mock_response("not json at all")):
         with pytest.raises(Exception):
             _condense_followup("a follow-up", history)
 
@@ -110,7 +110,7 @@ def test_streaming_falls_back_to_original_query_when_condense_fails():
     bad_hits = [_hit("a", "patents_act_1970", distance=1.2)]
     from generate import answer_query_streaming
 
-    with patch("generate.requests.post", return_value=_mock_response("not json at all")), \
+    with patch("llm_client.requests.post", return_value=_mock_response("not json at all")), \
          patch("generate.retrieve_vector", return_value=bad_hits) as mock_vec:
         events = list(answer_query_streaming("a follow-up question", history=history))
 

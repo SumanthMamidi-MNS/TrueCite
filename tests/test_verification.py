@@ -22,7 +22,7 @@ def _mock_response(response_json_str: str) -> MagicMock:
 
 
 def test_parses_supported_true():
-    with patch("verification.requests.post", return_value=_mock_response(
+    with patch("llm_client.requests.post", return_value=_mock_response(
         '{"supported": true, "reasoning": "The passage directly states this."}'
     )):
         result = verify_claim("some claim", "some passage")
@@ -31,7 +31,7 @@ def test_parses_supported_true():
 
 
 def test_parses_supported_false():
-    with patch("verification.requests.post", return_value=_mock_response(
+    with patch("llm_client.requests.post", return_value=_mock_response(
         '{"supported": false, "reasoning": "The passage does not mention this."}'
     )):
         result = verify_claim("some claim", "some passage")
@@ -39,7 +39,7 @@ def test_parses_supported_false():
 
 
 def test_raises_on_malformed_json_instead_of_defaulting():
-    with patch("verification.requests.post", return_value=_mock_response("not json at all")):
+    with patch("llm_client.requests.post", return_value=_mock_response("not json at all")):
         with pytest.raises(Exception):
             verify_claim("some claim", "some passage")
 
@@ -47,7 +47,7 @@ def test_raises_on_malformed_json_instead_of_defaulting():
 def test_raises_when_supported_field_missing_instead_of_defaulting():
     # A verification layer that fails open (assumes "supported" on a
     # malformed/incomplete response) defeats its own purpose.
-    with patch("verification.requests.post", return_value=_mock_response(
+    with patch("llm_client.requests.post", return_value=_mock_response(
         '{"reasoning": "forgot the verdict field"}'
     )):
         with pytest.raises(ValueError):
@@ -55,7 +55,7 @@ def test_raises_when_supported_field_missing_instead_of_defaulting():
 
 
 def test_raises_when_supported_field_is_not_a_bool():
-    with patch("verification.requests.post", return_value=_mock_response(
+    with patch("llm_client.requests.post", return_value=_mock_response(
         '{"supported": "yes", "reasoning": "wrong type"}'
     )):
         with pytest.raises(ValueError):
@@ -71,7 +71,7 @@ def test_majority_vote_resolves_a_split_decision():
         _mock_response('{"reasoning": "clearly stated", "supported": true}'),
         _mock_response('{"reasoning": "missed the connection", "supported": false}'),
     ]
-    with patch("verification.requests.post", side_effect=responses):
+    with patch("llm_client.requests.post", side_effect=responses):
         result = verify_claim("some claim", "some passage", votes=3)
     assert result["supported"] is True
     assert result["votes"] == [True, True, False]
@@ -83,7 +83,7 @@ def test_majority_vote_reasoning_comes_from_an_agreeing_call():
         _mock_response('{"reasoning": "reason B", "supported": true}'),
         _mock_response('{"reasoning": "reason C", "supported": false}'),
     ]
-    with patch("verification.requests.post", side_effect=responses):
+    with patch("llm_client.requests.post", side_effect=responses):
         result = verify_claim("some claim", "some passage", votes=3)
     assert result["reasoning"] in ("reason A", "reason B")
 
@@ -94,13 +94,13 @@ def test_majority_vote_tolerates_one_failed_call():
         _mock_response("not json at all"),  # this vote fails to parse
         _mock_response('{"reasoning": "ok", "supported": true}'),
     ]
-    with patch("verification.requests.post", side_effect=responses):
+    with patch("llm_client.requests.post", side_effect=responses):
         result = verify_claim("some claim", "some passage", votes=3)
     assert result["supported"] is True
 
 
 def test_raises_when_every_vote_fails():
     responses = [_mock_response("not json") for _ in range(3)]
-    with patch("verification.requests.post", side_effect=responses):
+    with patch("llm_client.requests.post", side_effect=responses):
         with pytest.raises(ValueError):
             verify_claim("some claim", "some passage", votes=3)

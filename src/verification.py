@@ -6,19 +6,22 @@ doesn't back the claim must be rejected — this is the specific failure mode
 that even production legal-AI tools still exhibit (2025 Stanford/Magesh
 study). Closing this gap is the project's main technical claim."
 
-Uses a local Ollama model (Qwen 2.5 7B), not the Claude API the PRD
-specifies for this layer — temporary substitution, no Anthropic API key is
-configured yet. See docs/decisions.md. Revisit once one exists.
+Runs through llm_client, which defaults to a local Ollama model (Qwen 2.5
+7B) rather than the Claude API the PRD specifies for this layer — a
+temporary substitution while no Anthropic API key is in use (a real key
+exists but is deliberately held back until deployment, to avoid burning
+through its rate limits during development; see docs/decisions.md). Set
+LLM_PROVIDER=anthropic and ANTHROPIC_API_KEY to switch — no code change
+needed here.
 """
 import json
-import os
 
-import requests
+import llm_client
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-# Same env var generate.py reads (OLLAMA_MODEL) so the whole pipeline — and
-# the UI's model badge, see api.py's /api/config — always names one model.
-MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
+# The active model's name, whichever provider llm_client is configured for —
+# generate.py's GENERATION_MODEL reads the same function, so verification
+# and generation can never name two different models.
+MODEL = llm_client.active_model_name()
 
 VERIFICATION_PROMPT_TEMPLATE = """You are verifying whether a passage from a legal/regulatory document actually supports a specific claim. Read the ENTIRE passage first and resolve any pronouns or references (e.g. "these", "such", "the above") using earlier sentences in the SAME passage before judging — do not evaluate a later sentence in isolation from the sentence it depends on. Be strict about facts genuinely absent from the passage: a passage that is merely on the same topic, without actually stating or directly implying the claim, does NOT support it. In particular, a passage that only says something is "as prescribed" or "as may be determined" elsewhere does NOT support a claim that states a specific figure or detail.
 
@@ -34,22 +37,16 @@ Respond with ONLY a JSON object in this exact format, no other text. Write "reas
 """
 
 
-def _verify_claim_once(claim: str, passage: str, model: str, timeout: int) -> dict:
+def _verify_claim_once(claim: str, passage: str, timeout: int) -> dict:
     prompt = VERIFICATION_PROMPT_TEMPLATE.format(claim=claim, passage=passage)
-    response = requests.post(
-        OLLAMA_URL,
-        json={"model": model, "prompt": prompt, "stream": False, "format": "json"},
-        timeout=timeout,
-    )
-    response.raise_for_status()
-    raw = response.json()["response"]
+    raw = llm_client.complete(prompt, timeout=timeout)
     result = json.loads(raw)
     if "supported" not in result or not isinstance(result["supported"], bool):
         raise ValueError(f"malformed verification response: {raw!r}")
     return result
 
 
-def verify_claim(claim: str, passage: str, model: str = MODEL, timeout: int = 120, votes: int = 3) -> dict:
+def verify_claim(claim: str, passage: str, timeout: int = 120, votes: int = 3) -> dict:
     """Returns {"supported": bool, "reasoning": str, "votes": list[bool]}.
 
     Runs the verification call `votes` times and takes the majority verdict,
@@ -65,8 +62,10 @@ def verify_claim(claim: str, passage: str, model: str = MODEL, timeout: int = 12
     results = []
     for _ in range(votes):
         try:
-            results.append(_verify_claim_once(claim, passage, model, timeout))
-        except (ValueError, requests.RequestException):
+            results.append(_verify_claim_once(claim, passage, timeout))
+        except Exception:
+            # Broad on purpose: must tolerate a failed vote the same way
+            # regardless of which provider llm_client is configured for.
             continue
     if not results:
         raise ValueError(f"all {votes} verification calls failed to produce a parseable response")

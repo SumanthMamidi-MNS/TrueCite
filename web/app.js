@@ -463,10 +463,15 @@ const KNOWN_MODEL_NAMES = {
 function formatModelName(raw) {
   if (KNOWN_MODEL_NAMES[raw]) return KNOWN_MODEL_NAMES[raw];
   // Unrecognized model id — fall back to a readable guess rather than a
-  // hardcoded name, so an operator swapping OLLAMA_MODEL always sees
-  // *something* accurate instead of a stale label.
+  // hardcoded name, so an operator swapping OLLAMA_MODEL/ANTHROPIC_MODEL
+  // always sees *something* accurate instead of a stale label.
   return raw.replace(/[:_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+// "local (Ollama)" is only true for the Ollama provider — once deployed
+// with LLM_PROVIDER=anthropic this is a cloud API, so the badge must say
+// so instead of carrying "local" over by mistake.
+const PROVIDER_LABELS = { ollama: "local (Ollama)", anthropic: "Anthropic API" };
 
 async function loadModelBadge() {
   const modelEl = $("#model-name");
@@ -475,7 +480,7 @@ async function loadModelBadge() {
     const res = await fetch("/api/config");
     if (!res.ok) throw new Error(String(res.status));
     const { model, provider, corpus_docs } = await res.json();
-    modelEl.textContent = `${formatModelName(model)} · local (${provider === "ollama" ? "Ollama" : provider})`;
+    modelEl.textContent = `${formatModelName(model)} · ${PROVIDER_LABELS[provider] || provider}`;
     corpusEl.textContent = `${corpus_docs} primary source${corpus_docs === 1 ? "" : "s"} indexed`;
   } catch {
     modelEl.textContent = "Model unavailable — is the server running?";

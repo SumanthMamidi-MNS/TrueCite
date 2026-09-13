@@ -4,7 +4,7 @@
 - Language: Python 3.12
 - Framework(s): none yet (CLI scripts only).
 - Database: ChromaDB (local, embedded, persisted to `corpus/chroma_db/`) — chosen over Qdrant despite Qdrant already running in the user's Docker Desktop; see `docs/decisions.md`.
-- LLM (Layer 2 verification + generation): local Ollama, Qwen 2.5 7B — **temporary substitution** for the Claude API the PRD specifies (§7), since no Anthropic API key is configured yet. Revisit once one exists; see `docs/decisions.md`.
+- LLM (Layer 2 verification + generation): routed through `src/llm_client.py`, which defaults to local Ollama (Qwen 2.5 7B) — **temporary substitution** for the Claude API the PRD specifies (§7). A real Anthropic API key exists but is deliberately held back until deployment (see `docs/decisions.md`); switching is `LLM_PROVIDER=anthropic` + `ANTHROPIC_API_KEY=...`, no code change.
 - Web UI: FastAPI + uvicorn serving a hand-written HTML/CSS/JS front end in `web/` (no build step, no framework). Replaced the original Streamlit app — see `docs/decisions.md`.
 - Key libraries: `pypdf` (PDF text extraction), `sentence-transformers` (BAAI/bge-m3 embeddings), `chromadb`, `rank-bm25`, `requests` (Ollama HTTP API), `fastapi`, `uvicorn`, `pytest`.
 
@@ -26,9 +26,10 @@ src/
   bm25_retrieval.py      # BM25 keyword retrieval, independent of the vector store
   hybrid_retrieval.py    # Reciprocal Rank Fusion of vector + BM25 rankings
   confidence_gate.py     # Layer 1: retrieval-distance threshold gate
-  verification.py        # Layer 2: claim-support verification (local Ollama, majority vote)
+  verification.py        # Layer 2: claim-support verification (majority vote)
   citation.py             # Layer 3: format_citation + resolve_authority
   generate.py              # end-to-end pipeline: answer_query_streaming (events) + answer_query (wrapper)
+  llm_client.py            # provider seam: Ollama (default) or Anthropic, via LLM_PROVIDER
   api.py                   # FastAPI app; /api/ask streams pipeline events as SSE, serves web/
 web/
   index.html               # chat shell: sidebar history, thread, pinned composer
@@ -121,6 +122,8 @@ it can't change how any previously-verified document chunks.
 
 ## Deployment / how it runs
 Local only, for now. Requires Ollama running locally with `qwen2.5:7b` pulled, in addition to the Python env. `python -m venv .venv` + `pip install -r requirements.txt`, then:
+
+**Switching to the real Claude API at deployment**: set `LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY=...` (optionally `ANTHROPIC_MODEL=...`, default `claude-sonnet-5`) before starting `uvicorn` — every LLM call in generation and Layer 2 verification routes through `src/llm_client.py`, so this is the only change needed, not a code edit. Not live-tested against a real key by design (see `docs/decisions.md`) — re-verify with the eval suite (`run_phase6.py`) once it's actually in use.
 - `uvicorn src.api:app --port 8000` — **the web UI** at http://localhost:8000 (first start is slow: it imports the embedding stack).
 - `python src/run_phase1.py` — parse + chunk the corpus.
 - `python src/run_phase2.py` — build the ChromaDB index, run 5 gate queries.

@@ -108,6 +108,12 @@ To use a different local Ollama model, set `OLLAMA_MODEL` before starting the
 server (e.g. `OLLAMA_MODEL=llama3.1:8b uvicorn src.api:app --port 8000`) — the
 UI's sidebar badge picks it up automatically, no code change needed.
 
+**At deployment**, switch to the real Claude API the PRD specifies with
+`LLM_PROVIDER=anthropic ANTHROPIC_API_KEY=... uvicorn src.api:app --port 8000`
+(optionally `ANTHROPIC_MODEL=...`) — every generation and Layer 2 call routes
+through `src/llm_client.py`, so this is the only change needed. See "Known
+limitations" below for why this hasn't been exercised against a real key yet.
+
 ### The interface
 
 A consultation tool rather than a search box: a thread you can keep adding to,
@@ -147,11 +153,15 @@ python -m pytest tests/    # 46 tests, all fast — live model calls are mocked
 Found through actual testing, not assumed away — documented here rather than
 discovered later by someone else:
 
-- **No Claude API key configured.** The PRD specifies the Claude API for
-  generation and Layer 2 verification; this build substitutes a local Ollama
-  model (Qwen 2.5 7B) instead, as an explicit, temporary decision (see
-  `docs/decisions.md`). This is the single biggest thing to revisit before any
-  real deployment — see the reliability note below.
+- **Real Claude API key exists, deliberately not yet in use.** The PRD
+  specifies the Claude API for generation and Layer 2 verification; this
+  build defaults to a local Ollama model (Qwen 2.5 7B) instead, routed
+  through `src/llm_client.py` (see `docs/decisions.md`). A real Anthropic
+  key is held back until deployment specifically to avoid burning through
+  its rate limits during development — switching is one env var change
+  (`LLM_PROVIDER=anthropic`), reviewed but **not live-tested against a real
+  key**, so re-verify with `run_phase6.py` once it's actually in use. This
+  is the single biggest thing that would change the numbers below.
 - **Local-model reliability.** The substitute 7B model gave inconsistent
   verdicts across repeated calls on the same (claim, passage) pair during
   testing — one genuinely well-supported claim was incorrectly rejected 1

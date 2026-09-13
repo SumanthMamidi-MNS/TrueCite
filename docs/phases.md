@@ -209,6 +209,25 @@ Sequential, gated phases per PRD §9 — no fixed schedule. Each phase gates the
       fix it), and confirmed Layer 2 catches every resulting mismatch — the user-facing
       cost is an elevated refusal rate on treaty-specific questions, never a false answer.
 
+## Phase 4/5 addendum — Provider abstraction — DONE
+- [x] User has a real Anthropic API key, held back until deployment (avoids burning rate
+      limits early — reasonable, not worked around). Asked to keep the architecture
+      genuinely ready to switch. It wasn't: `generate.py`/`verification.py` called
+      Ollama's HTTP API directly, no Anthropic path existed anywhere.
+- [x] Extracted `src/llm_client.py` as the one seam both modules call through. Defaults
+      to identical Ollama behavior (verified live post-refactor — same pipeline, same
+      citation output on a real query). Switching to the real API at deployment is
+      `LLM_PROVIDER=anthropic` + `ANTHROPIC_API_KEY=...`, no code change.
+- [x] `anthropic` SDK installed and pinned; dispatch logic unit-tested with 5 new mocked
+      tests (provider default, both call paths, missing-key error, model-name
+      resolution). Deliberately **not** live-tested against a real key, by design — that
+      first real call belongs at deployment, and should be re-verified with
+      `run_phase6.py` at that point rather than assumed identical to the mocked tests.
+      59 tests pass total.
+- [x] Fixed a real bug the refactor would otherwise have shipped: the model badge's
+      "local (Ollama)" label was hardcoded and would have kept saying "local" even after
+      switching to the cloud Anthropic API.
+
 ## Notes
 - No fixed calendar — move to the next phase only when the current one is verified working.
 - Known limitation carried forward from Phase 1: TKDL itself isn't public (restricted to

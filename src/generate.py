@@ -21,15 +21,13 @@ doesn't know") gets enforced end-to-end, not just per-layer:
   7. Compose the final answer only from surviving claims, each formatted
      with citation.format_citation. If every claim was dropped, refuse.
 
-Uses the local Ollama model for generation too (see verification.py's
-docstring — no Anthropic API key configured yet, same temporary substitution
-for the Claude API the PRD specifies for generation).
+Generation runs through llm_client too (see verification.py's docstring —
+same temporary local-Ollama substitution, same one-env-var switch to the
+real Claude API once it's actually in use).
 """
 import json
-import os
 
-import requests
-
+import llm_client
 from authority import get_authority
 from citation import format_citation, resolve_authority
 from confidence_gate import CONFIDENCE_THRESHOLD, passes_confidence_gate
@@ -37,12 +35,10 @@ from hybrid_retrieval import retrieve_hybrid
 from retrieval import retrieve as retrieve_vector
 from verification import verify_claim
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-# Read from the environment so swapping the local model (or, eventually, a
-# real Anthropic API key) doesn't require a code change anywhere the model
-# name is used — the UI's model badge (see api.py's /api/config) reads the
-# same value, so it can never drift out of sync with what's actually running.
-GENERATION_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
+# The active model's name, whichever provider llm_client is configured for —
+# so the UI's model badge (see api.py's /api/config) always names what's
+# actually running, Ollama or (once deployed) the real Anthropic API.
+GENERATION_MODEL = llm_client.active_model_name()
 CANDIDATE_K = 40
 MAX_HISTORY_TURNS = 3
 
@@ -155,13 +151,8 @@ def _generate_draft_claims(query: str, hits: list[dict]) -> list[dict]:
     prompt = GENERATION_PROMPT_TEMPLATE.format(
         query=query, passages_block=_build_passages_block(hits)
     )
-    response = requests.post(
-        OLLAMA_URL,
-        json={"model": GENERATION_MODEL, "prompt": prompt, "stream": False, "format": "json"},
-        timeout=180,
-    )
-    response.raise_for_status()
-    result = json.loads(response.json()["response"])
+    raw = llm_client.complete(prompt, timeout=180)
+    result = json.loads(raw)
     claims = result.get("claims", [])
     if not isinstance(claims, list):
         raise ValueError(f"malformed generation response: {result!r}")
@@ -185,13 +176,8 @@ def _condense_followup(query: str, history: list[dict]) -> str:
     prompt = CONDENSE_PROMPT_TEMPLATE.format(
         history_block=_format_history(history), query=query
     )
-    response = requests.post(
-        OLLAMA_URL,
-        json={"model": GENERATION_MODEL, "prompt": prompt, "stream": False, "format": "json"},
-        timeout=60,
-    )
-    response.raise_for_status()
-    result = json.loads(response.json()["response"])
+    raw = llm_client.complete(prompt, timeout=60)
+    result = json.loads(raw)
     standalone = result.get("standalone_question")
     if not isinstance(standalone, str) or not standalone.strip():
         raise ValueError(f"malformed condense response: {result!r}")
@@ -245,7 +231,13 @@ def answer_query_streaming(query: str, top_k: int = 8, history: list[dict] | Non
         yield {"type": "stage", "stage": "condense", "status": "start"}
         try:
             effective_query = _condense_followup(query, history[-MAX_HISTORY_TURNS:])
-        except (ValueError, requests.RequestException):
+        except Exception:
+            # Broad on purpose: this must fail open to the original query
+            # regardless of which provider llm_client is configured for
+            # (requests' exceptions for Ollama, the anthropic SDK's own
+            # exception types once deployed with a real key, or a malformed
+            # response caught as ValueError) — a broken rewrite can never be
+            # allowed to sink the whole answer.
             effective_query = query
         yield {
             "type": "stage",
@@ -316,8 +308,11 @@ def answer_query_streaming(query: str, top_k: int = 8, history: list[dict] | Non
 
         try:
             verdict = verify_claim(claim["text"], chunk["text"])
-        except (ValueError, requests.RequestException) as exc:
-            # fail closed: an unverifiable claim is dropped, not kept
+        except Exception as exc:
+            # fail closed: an unverifiable claim is dropped, not kept.
+            # Broad on purpose, same reasoning as the condense fallback
+            # above — must work the same way regardless of which provider
+            # llm_client is configured for.
             discarded_claims.append(
                 {"text": claim["text"], "reason": f"verification unavailable ({type(exc).__name__})"}
             )
