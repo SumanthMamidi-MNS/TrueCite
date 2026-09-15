@@ -108,11 +108,24 @@ To use a different local Ollama model, set `OLLAMA_MODEL` before starting the
 server (e.g. `OLLAMA_MODEL=llama3.1:8b uvicorn src.api:app --port 8000`) — the
 UI's sidebar badge picks it up automatically, no code change needed.
 
-**At deployment**, switch to the real Claude API the PRD specifies with
-`LLM_PROVIDER=anthropic ANTHROPIC_API_KEY=... uvicorn src.api:app --port 8000`
-(optionally `ANTHROPIC_MODEL=...`) — every generation and Layer 2 call routes
-through `src/llm_client.py`, so this is the only change needed. See "Known
-limitations" below for why this hasn't been exercised against a real key yet.
+Two run modes are supported. Running locally like above (Ollama, no key)
+is meant to stay the permanent way to self-host this from the GitHub repo —
+it's free and works offline. **For an actual hosted deployment**, switch to
+a cloud provider instead:
+
+```bash
+# Gemini — the intended deployment provider
+LLM_PROVIDER=gemini GEMINI_API_KEY=... uvicorn src.api:app --port 8000
+
+# Anthropic — the PRD's original choice, built first, kept available
+LLM_PROVIDER=anthropic ANTHROPIC_API_KEY=... uvicorn src.api:app --port 8000
+```
+
+Every generation and Layer 2 call routes through `src/llm_client.py`, so
+this env-var change is all deployment needs — see "Known limitations" below
+for why neither cloud path has been exercised against a real key yet. Note
+that GitHub itself only hosts the *code*; a live deployment needs an actual
+Python-capable host (e.g. Hugging Face Spaces, Render) — not set up yet.
 
 ### The interface
 
@@ -153,15 +166,17 @@ python -m pytest tests/    # 46 tests, all fast — live model calls are mocked
 Found through actual testing, not assumed away — documented here rather than
 discovered later by someone else:
 
-- **Real Claude API key exists, deliberately not yet in use.** The PRD
+- **Real cloud API keys exist, deliberately not yet in use.** The PRD
   specifies the Claude API for generation and Layer 2 verification; this
   build defaults to a local Ollama model (Qwen 2.5 7B) instead, routed
-  through `src/llm_client.py` (see `docs/decisions.md`). A real Anthropic
-  key is held back until deployment specifically to avoid burning through
-  its rate limits during development — switching is one env var change
-  (`LLM_PROVIDER=anthropic`), reviewed but **not live-tested against a real
-  key**, so re-verify with `run_phase6.py` once it's actually in use. This
-  is the single biggest thing that would change the numbers below.
+  through `src/llm_client.py` (see `docs/decisions.md`) — that stays the
+  permanent mode for anyone self-hosting from this repo. Real Gemini and
+  Anthropic keys exist for an actual hosted deployment, held back
+  specifically to avoid burning through rate limits during development —
+  switching is one env var change (`LLM_PROVIDER=gemini` or `anthropic`),
+  reviewed but **not live-tested against a real key**, so re-verify with
+  `run_phase6.py` once one is actually in use. This is the single biggest
+  thing that would change the numbers below.
 - **Local-model reliability.** The substitute 7B model gave inconsistent
   verdicts across repeated calls on the same (claim, passage) pair during
   testing — one genuinely well-supported claim was incorrectly rejected 1

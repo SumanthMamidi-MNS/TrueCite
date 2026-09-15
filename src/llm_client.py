@@ -2,14 +2,21 @@
 whichever LLM is actually configured.
 
 Defaults to the local Ollama substitution this project has used throughout
-(see docs/decisions.md) — nothing here changes that behavior. Set
-LLM_PROVIDER=anthropic and ANTHROPIC_API_KEY to switch to the real Claude
-API the PRD specifies for generation and Layer 2 verification; that's the
-only change deployment needs, not a code change. Deliberately unexercised
-against a real key during development — the key exists but is held back
-until deployment to avoid burning through its rate limits before then (see
-docs/decisions.md) — so the Anthropic path here is reviewed, not
-live-tested; re-verify it once the key is actually in use.
+(see docs/decisions.md) — nothing here changes that behavior, and it's what
+someone who clones/downloads this repo and runs it locally uses, no API key
+needed. Two cloud paths exist for a hosted deployment instead:
+
+  - LLM_PROVIDER=gemini + GEMINI_API_KEY — the intended provider for an
+    actual hosted deployment of this project (chosen over Anthropic for
+    deployment specifically — see docs/decisions.md).
+  - LLM_PROVIDER=anthropic + ANTHROPIC_API_KEY — the Claude API the PRD
+    originally specifies for this layer; built first, kept available.
+
+Both cloud paths are reviewed, not live-tested — deliberately unexercised
+against a real key during development (a real key exists for each but is
+held back to avoid burning through rate limits before deployment; see
+docs/decisions.md). Re-verify whichever one is actually deployed before
+trusting its numbers.
 """
 import os
 
@@ -21,6 +28,7 @@ OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
 
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 
 def _complete_ollama(prompt: str, timeout: int) -> str:
@@ -54,6 +62,23 @@ def _complete_anthropic(prompt: str, timeout: int) -> str:
     return message.content[0].text
 
 
+def _complete_gemini(prompt: str, timeout: int) -> str:
+    # Imported lazily, same reasoning as the anthropic import above — only
+    # needs to actually work when this provider is selected.
+    from google import genai
+    from google.genai import types
+
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "LLM_PROVIDER=gemini but GEMINI_API_KEY is not set — set it "
+            "before deploying with the real API (see README's Running it section)."
+        )
+    client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=timeout * 1000))
+    response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
+    return response.text
+
+
 def complete(prompt: str, timeout: int = 120) -> str:
     """Run one prompt through the configured provider, returning its raw text
     response. Callers parse that text as JSON themselves (both existing
@@ -61,6 +86,8 @@ def complete(prompt: str, timeout: int = 120) -> str:
     WHERE the text comes from, not how it's interpreted, so switching
     providers can't silently change validation/error-handling behavior.
     """
+    if LLM_PROVIDER == "gemini":
+        return _complete_gemini(prompt, timeout)
     if LLM_PROVIDER == "anthropic":
         return _complete_anthropic(prompt, timeout)
     return _complete_ollama(prompt, timeout)
@@ -68,4 +95,8 @@ def complete(prompt: str, timeout: int = 120) -> str:
 
 def active_model_name() -> str:
     """What the UI's model badge shows — see api.py's /api/config."""
-    return ANTHROPIC_MODEL if LLM_PROVIDER == "anthropic" else OLLAMA_MODEL
+    if LLM_PROVIDER == "gemini":
+        return GEMINI_MODEL
+    if LLM_PROVIDER == "anthropic":
+        return ANTHROPIC_MODEL
+    return OLLAMA_MODEL

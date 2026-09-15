@@ -46,6 +46,35 @@ def test_complete_routes_to_anthropic_when_configured():
     mock_post.assert_not_called()
 
 
+def test_complete_routes_to_gemini_when_configured():
+    mock_response = MagicMock()
+    mock_response.text = "hello from gemini"
+    mock_client = MagicMock()
+    mock_client.models.generate_content.return_value = mock_response
+
+    with patch("llm_client.LLM_PROVIDER", "gemini"), \
+         patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}), \
+         patch("google.genai.Client", return_value=mock_client) as mock_genai_cls, \
+         patch("llm_client.requests.post") as mock_post:
+        result = llm_client.complete("a prompt", timeout=10)
+
+    assert result == "hello from gemini"
+    mock_genai_cls.assert_called_once()
+    assert mock_genai_cls.call_args.kwargs["api_key"] == "test-key"
+    mock_client.models.generate_content.assert_called_once_with(
+        model=llm_client.GEMINI_MODEL, contents="a prompt"
+    )
+    mock_post.assert_not_called()
+
+
+def test_gemini_provider_without_api_key_raises_clear_error():
+    with patch("llm_client.LLM_PROVIDER", "gemini"), \
+         patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("GEMINI_API_KEY", None)
+        with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
+            llm_client.complete("a prompt")
+
+
 def test_anthropic_provider_without_api_key_raises_clear_error():
     # Fail loudly rather than silently falling back to Ollama — a deploy
     # that sets LLM_PROVIDER=anthropic but forgets the key should not
@@ -62,3 +91,5 @@ def test_active_model_name_reflects_provider():
         assert llm_client.active_model_name() == llm_client.OLLAMA_MODEL
     with patch("llm_client.LLM_PROVIDER", "anthropic"):
         assert llm_client.active_model_name() == llm_client.ANTHROPIC_MODEL
+    with patch("llm_client.LLM_PROVIDER", "gemini"):
+        assert llm_client.active_model_name() == llm_client.GEMINI_MODEL

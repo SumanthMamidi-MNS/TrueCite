@@ -471,7 +471,7 @@ function formatModelName(raw) {
 // "local (Ollama)" is only true for the Ollama provider — once deployed
 // with LLM_PROVIDER=anthropic this is a cloud API, so the badge must say
 // so instead of carrying "local" over by mistake.
-const PROVIDER_LABELS = { ollama: "local (Ollama)", anthropic: "Anthropic API" };
+const PROVIDER_LABELS = { ollama: "local (Ollama)", anthropic: "Anthropic API", gemini: "Gemini API" };
 
 async function loadModelBadge() {
   const modelEl = $("#model-name");

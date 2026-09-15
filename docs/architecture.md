@@ -4,7 +4,7 @@
 - Language: Python 3.12
 - Framework(s): none yet (CLI scripts only).
 - Database: ChromaDB (local, embedded, persisted to `corpus/chroma_db/`) — chosen over Qdrant despite Qdrant already running in the user's Docker Desktop; see `docs/decisions.md`.
-- LLM (Layer 2 verification + generation): routed through `src/llm_client.py`, which defaults to local Ollama (Qwen 2.5 7B) — **temporary substitution** for the Claude API the PRD specifies (§7). A real Anthropic API key exists but is deliberately held back until deployment (see `docs/decisions.md`); switching is `LLM_PROVIDER=anthropic` + `ANTHROPIC_API_KEY=...`, no code change.
+- LLM (Layer 2 verification + generation): routed through `src/llm_client.py`, which defaults to local Ollama (Qwen 2.5 7B) — **temporary substitution** for the Claude API the PRD specifies (§7). This is intentionally also the permanent path for anyone who clones/downloads the repo and self-hosts: no API key, no cost, works offline. Two cloud providers are wired in for an actual hosted deployment instead — `LLM_PROVIDER=gemini` (the intended deployment provider) or `LLM_PROVIDER=anthropic` (the PRD's original choice, built first, kept available) — both need only their `_API_KEY` env var, no code change. Real keys for both exist but are deliberately held back until deployment (see `docs/decisions.md`).
 - Web UI: FastAPI + uvicorn serving a hand-written HTML/CSS/JS front end in `web/` (no build step, no framework). Replaced the original Streamlit app — see `docs/decisions.md`.
 - Key libraries: `pypdf` (PDF text extraction), `sentence-transformers` (BAAI/bge-m3 embeddings), `chromadb`, `rank-bm25`, `requests` (Ollama HTTP API), `fastapi`, `uvicorn`, `pytest`.
 
@@ -29,7 +29,7 @@ src/
   verification.py        # Layer 2: claim-support verification (majority vote)
   citation.py             # Layer 3: format_citation + resolve_authority
   generate.py              # end-to-end pipeline: answer_query_streaming (events) + answer_query (wrapper)
-  llm_client.py            # provider seam: Ollama (default) or Anthropic, via LLM_PROVIDER
+  llm_client.py            # provider seam: Ollama (default/self-host), Gemini or Anthropic (deployment), via LLM_PROVIDER
   api.py                   # FastAPI app; /api/ask streams pipeline events as SSE, serves web/
 web/
   index.html               # chat shell: sidebar history, thread, pinned composer
@@ -123,7 +123,10 @@ it can't change how any previously-verified document chunks.
 ## Deployment / how it runs
 Local only, for now. Requires Ollama running locally with `qwen2.5:7b` pulled, in addition to the Python env. `python -m venv .venv` + `pip install -r requirements.txt`, then:
 
-**Switching to the real Claude API at deployment**: set `LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY=...` (optionally `ANTHROPIC_MODEL=...`, default `claude-sonnet-5`) before starting `uvicorn` — every LLM call in generation and Layer 2 verification routes through `src/llm_client.py`, so this is the only change needed, not a code edit. Not live-tested against a real key by design (see `docs/decisions.md`) — re-verify with the eval suite (`run_phase6.py`) once it's actually in use.
+**Two distinct run modes, by design**:
+- **Self-hosted (GitHub clone/download)**: Ollama, no key, no change from today — this is the default and needs nothing.
+- **Hosted deployment**: set `LLM_PROVIDER=gemini` and `GEMINI_API_KEY=...` (optionally `GEMINI_MODEL=...`, default `gemini-2.5-flash`) before starting `uvicorn`. `LLM_PROVIDER=anthropic` + `ANTHROPIC_API_KEY=...` also works (built first, PRD's original choice, kept available if the provider decision changes again). Either way, every LLM call in generation and Layer 2 verification routes through `src/llm_client.py`, so this is the only change needed, not a code edit. **Neither cloud path is live-tested against a real key by design** (see `docs/decisions.md`) — re-verify with the eval suite (`run_phase6.py`) once one is actually in use.
+- **Hosting note**: GitHub itself (the repo) is not a place this can run — it needs an actual Python/FastAPI-capable host. Not decided/set up yet; a Docker-friendly platform with a free tier (e.g. Hugging Face Spaces, Render) fits this app's shape.
 - `uvicorn src.api:app --port 8000` — **the web UI** at http://localhost:8000 (first start is slow: it imports the embedding stack).
 - `python src/run_phase1.py` — parse + chunk the corpus.
 - `python src/run_phase2.py` — build the ChromaDB index, run 5 gate queries.

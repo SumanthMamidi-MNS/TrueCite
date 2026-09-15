@@ -227,6 +227,13 @@ Sequential, gated phases per PRD §9 — no fixed schedule. Each phase gates the
 - [x] Fixed a real bug the refactor would otherwise have shipped: the model badge's
       "local (Ollama)" label was hardcoded and would have kept saying "local" even after
       switching to the cloud Anthropic API.
+- [x] 2026-09-15: run-mode split settled — Ollama stays permanent/default for anyone
+      self-hosting from the GitHub repo; a hosted deployment uses Gemini instead
+      (user's choice, generous free tier). Added `LLM_PROVIDER=gemini` alongside
+      Anthropic in `llm_client.py`, same unexercised-by-design treatment, 3 more mocked
+      tests. 61 tests pass. Corrected a real misunderstanding along the way: GitHub
+      Pages cannot run this (static-only, no backend) — a live deployment needs an
+      actual Python host, not chosen yet (Hugging Face Spaces / Render both fit).
 
 ## Notes
 - No fixed calendar — move to the next phase only when the current one is verified working.
