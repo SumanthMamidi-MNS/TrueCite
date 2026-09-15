@@ -163,6 +163,27 @@ def test_inline_subsection_1_is_not_lost_when_section_has_numeric_subsections():
     assert "prescribed manner" in sub2.text
 
 
+def test_line_wrapped_calendar_year_is_not_mistaken_for_a_section_number():
+    # Real bug found live: "...published in November \n2012. Mr. Ruiz
+    # contributed..." — a PDF line-wrap puts "2012." at line start, which
+    # SECTION_RE would otherwise read as section "2012", swallowing
+    # everything after it into one oversized chunk.
+    page = (
+        "BE it enacted by Parliament as follows:\n"
+        "3. Getting started.—A consultation draft was published in November\n"
+        "2012. Mr. Ruiz contributed significantly to that draft, long enough "
+        "to be real content that must not become its own section here.\n"
+        "4. Next real section.—Some content long enough to count as a real "
+        "section body for this synthetic test case used here.\n"
+    )
+    chunks = chunk_document("test_doc", [page], body_start_anchor="BE it enacted")
+    section_numbers = [c.section_number for c in chunks if c.section_number]
+    assert "2012" not in section_numbers, section_numbers
+    sec3 = next(c for c in chunks if c.section_number == "3")
+    assert "Mr. Ruiz contributed" in sec3.text
+    assert "4" in section_numbers, section_numbers
+
+
 def test_treaty_article_headings_are_chunked_when_no_numeric_sections_exist():
     # A second numbering convention alongside "N. Title.—": international
     # treaty text numbers "ARTICLE N" with the title on the next line. Only

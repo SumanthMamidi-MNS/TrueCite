@@ -347,6 +347,13 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 .discarded-item .dropped { color: var(--text-mute); text-decoration: line-through; font-size: .85rem; }
 .discarded-item .why { margin-top: .3rem; font-size: .78rem; color: var(--text-dim); }
 
+.coverage-note {
+  margin-top: .8rem; padding: .6rem .8rem; border-radius: var(--radius-sm);
+  background: rgba(240,179,78,.06); border-left: 2px solid rgba(240,179,78,.4);
+  font-size: .82rem; color: var(--text-dim); line-height: 1.5;
+}
+.coverage-note strong { color: var(--amber); font-weight: 600; }
+
 /* message actions */
 .msg-actions { margin-top: .8rem; display: flex; gap: .4rem; }
 .act-btn {

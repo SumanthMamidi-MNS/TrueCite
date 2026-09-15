@@ -58,6 +58,17 @@ FOOTNOTE_CONTENT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# A PDF line-wrap can put a calendar year at the very start of a line right
+# before its own sentence-ending period — e.g. "...published in November
+# \n2012. Mr. Ruiz contributed..." — which SECTION_RE then reads as a real
+# section header "2012." No document in this corpus has anywhere near 1900+
+# sections, so a 4-digit "section number" in a plausible year range is far
+# more likely to be exactly this than a real section. Confirmed directly,
+# not hypothetical: this exact case in the WIPO TK toolkit swallowed the
+# rest of that 40-page document into one 79,710-character chunk, found live
+# while testing the relevance-filter pipeline stage — see docs/decisions.md.
+_PLAUSIBLE_YEAR_RE = re.compile(r"^(19|20)\d{2}$")
+
 # Sections this short are almost always false positives from stray numbering,
 # not real structure (a real Act section always has substantive body text).
 MIN_SECTION_BODY_CHARS = 20
@@ -478,7 +489,10 @@ def _chunk_region(
 ) -> list[Chunk]:
     """Chunk one contiguous region (e.g. one chapter, or the whole doc) by numbered sections."""
     raw_matches = list(SECTION_RE.finditer(text))
-    content_filtered = [m for m in raw_matches if not FOOTNOTE_CONTENT_RE.match(m.group(2))]
+    content_filtered = [
+        m for m in raw_matches
+        if not FOOTNOTE_CONTENT_RE.match(m.group(2)) and not _PLAUSIBLE_YEAR_RE.match(m.group(1))
+    ]
     matches = _filter_monotonic(content_filtered)
     if len(matches) < 2:
         article_matches = list(ARTICLE_HEADING_RE.finditer(text))

@@ -16,6 +16,8 @@ every commit.
 Run: .venv/Scripts/python.exe src/run_phase6.py
 """
 import json
+import sys
+import time
 from pathlib import Path
 
 from generate import answer_query
@@ -52,16 +54,24 @@ UNANSWERABLE = [
 ]
 
 
-def main():
+def main(relevance_filter: bool = True, results_path: Path = RESULTS_PATH):
+    """`relevance_filter` exists so this script can A/B Stage 3 (see
+    src/relevance.py) against the false-refusal rate before trusting it in
+    the UI — run once with it on, once with it off, compare. Per-question
+    wall time is recorded so the two runs' latency cost is measured, not
+    guessed (see docs/decisions.md for why that matters for this stage).
+    """
     results = []
 
     print("=" * 70)
-    print("ANSWERABLE QUESTIONS")
+    print(f"ANSWERABLE QUESTIONS (relevance_filter={relevance_filter})")
     print("=" * 70)
     correct_citation = 0
     false_refusals = 0
     for query, expected_doc_ids in ANSWERABLE:
-        r = answer_query(query)
+        t0 = time.time()
+        r = answer_query(query, relevance_filter=relevance_filter)
+        elapsed = round(time.time() - t0, 1)
         cited_doc_ids = {c["doc_id"] for c in r["claims"]}
         got_it_right = (not r["refused"]) and bool(cited_doc_ids & expected_doc_ids)
         if r["refused"]:
@@ -69,9 +79,12 @@ def main():
         elif got_it_right:
             correct_citation += 1
         status = "OK" if got_it_right else ("FALSE REFUSAL" if r["refused"] else "WRONG/PARTIAL CITATION")
-        print(f"[{status}] {query[:65]}")
+        print(f"[{status}] ({elapsed}s) {query[:65]}")
         print(f"   expected any of={sorted(expected_doc_ids)} got={sorted(cited_doc_ids) if cited_doc_ids else '(refused)'}")
-        results.append({"query": query, "category": "answerable", "expected_doc_ids": sorted(expected_doc_ids), **r})
+        results.append({
+            "query": query, "category": "answerable", "expected_doc_ids": sorted(expected_doc_ids),
+            "elapsed_seconds": elapsed, **r,
+        })
 
     print()
     print("=" * 70)
@@ -79,17 +92,23 @@ def main():
     print("=" * 70)
     correctly_refused = 0
     for query in UNANSWERABLE:
-        r = answer_query(query)
+        t0 = time.time()
+        r = answer_query(query, relevance_filter=relevance_filter)
+        elapsed = round(time.time() - t0, 1)
         if r["refused"]:
             correctly_refused += 1
         status = "OK (refused)" if r["refused"] else "FALSE ANSWER (should have refused)"
-        print(f"[{status}] {query[:65]}")
+        print(f"[{status}] ({elapsed}s) {query[:65]}")
         if not r["refused"]:
             print(f"   answered: {r['answer'][:150]}")
-        results.append({"query": query, "category": "unanswerable", "expected_doc_id": None, **r})
+        results.append({
+            "query": query, "category": "unanswerable", "expected_doc_id": None,
+            "elapsed_seconds": elapsed, **r,
+        })
 
     n_answerable = len(ANSWERABLE)
     n_unanswerable = len(UNANSWERABLE)
+    avg_elapsed = round(sum(r["elapsed_seconds"] for r in results) / len(results), 1)
     print()
     print("=" * 70)
     print("METRICS")
@@ -98,12 +117,16 @@ def main():
     print(f"False-refusal rate (answerable questions incorrectly refused):     {false_refusals}/{n_answerable}")
     print(f"Correct-refusal rate (unanswerable questions correctly refused):   {correctly_refused}/{n_unanswerable}")
     print(f"False-answer rate (unanswerable questions incorrectly answered):   {n_unanswerable - correctly_refused}/{n_unanswerable}")
+    print(f"Average time per question:                                        {avg_elapsed}s")
 
-    RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    RESULTS_PATH.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
+    results_path.parent.mkdir(parents=True, exist_ok=True)
+    results_path.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
     print()
-    print(f"Full results written to {RESULTS_PATH}")
+    print(f"Full results written to {results_path}")
 
 
 if __name__ == "__main__":
-    main()
+    relevance_filter = "--no-relevance-filter" not in sys.argv
+    suffix = "" if relevance_filter else "_no_relevance_filter"
+    out_path = RESULTS_PATH.with_name(f"phase6_results{suffix}.json")
+    main(relevance_filter=relevance_filter, results_path=out_path)

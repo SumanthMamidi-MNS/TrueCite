@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from generate import _condense_followup, _select_grounded_hits
+from generate import _condense_followup, _select_grounded_hits, answer_query_streaming
 
 
 def _mock_response(response_json_str: str) -> MagicMock:
@@ -118,3 +118,163 @@ def test_streaming_falls_back_to_original_query_when_condense_fails():
     assert condense_done["meta"]["standalone_question"] == "a follow-up question"
     assert condense_done["meta"]["rewritten"] is False
     mock_vec.assert_called_once_with("a follow-up question", top_k=40)
+
+
+def _verified_verdict():
+    return {"supported": True, "reasoning": "supported", "votes": [True, True, True]}
+
+
+# ───────── Stage 3 (relevance filter) wiring ─────────
+
+def test_relevance_filter_reindexes_correctly_for_downstream_claim_lookup():
+    # The real bug risk this stage introduces: if the passage numbers
+    # generation sees don't match the filtered `hits` list exactly, a claim
+    # citing "source: 1" would resolve to the wrong chunk after filtering.
+    hits = [
+        _hit("a", "patents_act_1970"),
+        _hit("b", "patents_act_1970"),
+        _hit("c", "patents_act_1970"),
+        _hit("d", "patents_act_1970"),
+    ]
+    relevance_verdicts = [
+        {"index": 1, "relevant": False, "reason": "off topic"},
+        {"index": 2, "relevant": True, "reason": ""},
+        {"index": 3, "relevant": True, "reason": ""},
+        {"index": 4, "relevant": True, "reason": ""},
+    ]
+    draft_claims = [{"text": "a claim", "source": 1}]  # post-filter passage 1 == original "b"
+
+    with patch("generate.retrieve_vector", return_value=hits), \
+         patch("generate.retrieve_hybrid", return_value=hits), \
+         patch("generate.judge_relevance", return_value=relevance_verdicts), \
+         patch("generate._generate_draft_claims", return_value=draft_claims), \
+         patch("generate.verify_claim", return_value=_verified_verdict()):
+        result = next(
+            e["result"] for e in answer_query_streaming("q", relevance_filter=True, coverage_check=False)
+            if e["type"] == "complete"
+        )
+    assert len(result["claims"]) == 1
+    assert result["claims"][0]["chunk_id"] == "b"
+
+
+def test_relevance_done_event_precedes_sources_event():
+    hits = [_hit(str(i), "patents_act_1970") for i in range(1, 5)]
+    verdicts = [{"index": i, "relevant": True, "reason": ""} for i in range(1, 5)]
+    with patch("generate.retrieve_vector", return_value=hits), \
+         patch("generate.retrieve_hybrid", return_value=hits), \
+         patch("generate.judge_relevance", return_value=verdicts), \
+         patch("generate._generate_draft_claims", return_value=[]):
+        events = list(answer_query_streaming("q", relevance_filter=True, coverage_check=False))
+    relevance_done_idx = next(
+        i for i, e in enumerate(events) if e.get("stage") == "relevance" and e["status"] == "done"
+    )
+    sources_idx = next(i for i, e in enumerate(events) if e["type"] == "sources")
+    assert relevance_done_idx < sources_idx
+
+
+def test_relevance_failure_fails_open_keeping_all_hits():
+    hits = [_hit(str(i), "patents_act_1970") for i in range(1, 5)]
+    with patch("generate.retrieve_vector", return_value=hits), \
+         patch("generate.retrieve_hybrid", return_value=hits), \
+         patch("generate.judge_relevance", side_effect=ValueError("boom")), \
+         patch("generate._generate_draft_claims", return_value=[]) as mock_draft:
+        events = list(answer_query_streaming("q", relevance_filter=True, coverage_check=False))
+    relevance_done = next(e for e in events if e.get("stage") == "relevance" and e["status"] == "done")
+    assert relevance_done["meta"]["failed_open"] is True
+    assert relevance_done["meta"]["kept"] == 4
+    passed_hits = mock_draft.call_args.args[1]
+    assert len(passed_hits) == 4
+
+
+def test_relevance_all_irrelevant_still_keeps_min_keep_floor():
+    # Relevance must never be able to cause a refusal on its own — a bad
+    # batch of verdicts can narrow generation's input but never starve it.
+    hits = [_hit(str(i), "patents_act_1970") for i in range(1, 5)]
+    verdicts = [{"index": i, "relevant": False, "reason": "off topic"} for i in range(1, 5)]
+    with patch("generate.retrieve_vector", return_value=hits), \
+         patch("generate.retrieve_hybrid", return_value=hits), \
+         patch("generate.judge_relevance", return_value=verdicts), \
+         patch("generate._generate_draft_claims", return_value=[]):
+        events = list(answer_query_streaming("q", relevance_filter=True, coverage_check=False))
+    sources_event = next(e for e in events if e["type"] == "sources")
+    assert len(sources_event["sources"]) >= 3
+
+
+# ───────── Stage 5 (coverage check) wiring ─────────
+
+def test_coverage_failure_fails_open_answer_unchanged():
+    hits = [_hit("a", "patents_act_1970")]
+    draft_claims = [{"text": "a claim", "source": 1}]
+    with patch("generate.retrieve_vector", return_value=hits), \
+         patch("generate.retrieve_hybrid", return_value=hits), \
+         patch("generate.judge_relevance", return_value=[{"index": 1, "relevant": True, "reason": ""}]), \
+         patch("generate._generate_draft_claims", return_value=draft_claims), \
+         patch("generate.verify_claim", return_value=_verified_verdict()), \
+         patch("generate.assess_coverage", side_effect=ValueError("boom")):
+        events = list(answer_query_streaming("q"))
+    complete = next(e for e in events if e["type"] == "complete")
+    assert complete["result"]["coverage"] is None
+    assert "a claim" in complete["result"]["answer"]
+    coverage_done = next(e for e in events if e.get("stage") == "coverage" and e["status"] == "done")
+    assert coverage_done["meta"]["available"] is False
+
+
+def test_coverage_verdict_never_changes_answer_claims_or_citations():
+    hits = [_hit("a", "patents_act_1970")]
+    draft_claims = [{"text": "a claim", "source": 1}]
+
+    def run(addresses):
+        with patch("generate.retrieve_vector", return_value=hits), \
+             patch("generate.retrieve_hybrid", return_value=hits), \
+             patch("generate.judge_relevance", return_value=[{"index": 1, "relevant": True, "reason": ""}]), \
+             patch("generate._generate_draft_claims", return_value=draft_claims), \
+             patch("generate.verify_claim", return_value=_verified_verdict()), \
+             patch(
+                 "generate.assess_coverage",
+                 return_value={"addresses": addresses, "gap": "" if addresses else "missing something"},
+             ):
+            events = list(answer_query_streaming("q"))
+        return next(e for e in events if e["type"] == "complete")["result"]
+
+    result_true, result_false = run(True), run(False)
+    assert result_true["answer"] == result_false["answer"]
+    assert result_true["claims"] == result_false["claims"]
+    assert result_true["citations"] == result_false["citations"]
+
+
+def test_coverage_not_called_on_gate_refusal():
+    bad_hits = [_hit("a", "patents_act_1970", distance=1.2)]
+    with patch("generate.retrieve_vector", return_value=bad_hits), \
+         patch("generate.assess_coverage") as mock_coverage:
+        events = list(answer_query_streaming("q"))
+    mock_coverage.assert_not_called()
+    assert not any(e.get("stage") == "coverage" for e in events)
+
+
+def test_coverage_not_called_on_verification_refusal():
+    hits = [_hit("a", "patents_act_1970")]
+    draft_claims = [{"text": "a claim", "source": 1}]
+    with patch("generate.retrieve_vector", return_value=hits), \
+         patch("generate.retrieve_hybrid", return_value=hits), \
+         patch("generate.judge_relevance", return_value=[{"index": 1, "relevant": True, "reason": ""}]), \
+         patch("generate._generate_draft_claims", return_value=draft_claims), \
+         patch("generate.verify_claim", return_value={"supported": False, "reasoning": "no", "votes": [False]}), \
+         patch("generate.assess_coverage") as mock_coverage:
+        events = list(answer_query_streaming("q"))
+    mock_coverage.assert_not_called()
+
+
+def test_coverage_assessed_against_condensed_question_when_history_present():
+    history = [{"q": "earlier q", "a": "earlier a"}]
+    hits = [_hit("a", "patents_act_1970")]
+    draft_claims = [{"text": "a claim", "source": 1}]
+    with patch("generate._condense_followup", return_value="the condensed standalone question"), \
+         patch("generate.retrieve_vector", return_value=hits), \
+         patch("generate.retrieve_hybrid", return_value=hits), \
+         patch("generate.judge_relevance", return_value=[{"index": 1, "relevant": True, "reason": ""}]), \
+         patch("generate._generate_draft_claims", return_value=draft_claims), \
+         patch("generate.verify_claim", return_value=_verified_verdict()), \
+         patch("generate.assess_coverage", return_value={"addresses": True, "gap": ""}) as mock_coverage:
+        list(answer_query_streaming("a follow-up", history=history))
+    mock_coverage.assert_called_once()
+    assert mock_coverage.call_args.args[0] == "the condensed standalone question"

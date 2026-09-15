@@ -246,6 +246,55 @@ Sequential, gated phases per PRD §9 — no fixed schedule. Each phase gates the
       that pattern's substance, and more agent hops just slows an already-slow local
       model for unverified gain; not built. 65 tests pass.
 
+## Phase 8 — Multi-stage verification pipeline — DONE
+- [x] User proposed a specific pipeline extension (understand the question, retrieve,
+      check retrieval matches the question, frame the answer, check the final answer
+      satisfies the question) and asked for an Opus-run architecture plan before
+      building anything. Commissioned one in an isolated worktree, briefed against the
+      real code. Verdict: the middle and last checks are genuinely new (Layer 1 checks
+      vector distance, not topical relevance; Layer 2 checks a claim against its
+      passage, never the assembled answer against the question) — build both, but as
+      non-blocking stages, never refusal gates, because the system's Phase 6 numbers
+      are a perfect 0/5 false-answer rate against a 5/11 false-refusal rate, so a new
+      way to refuse would attack the wrong side of that tradeoff.
+- [x] Built `src/relevance.py` (Stage 3 — one-call passage-relevance filter, fails
+      open, `MIN_KEEP=3` floor, never refuses) and `src/coverage.py` (Stage 5 — one-call
+      answer-coverage check, advisory only, can never edit `answer`/`claims`/
+      `citations`). Both single-call, not majority-vote, on the rule now standard for
+      this project: majority-vote where a bad call can delete grounded content (Layer
+      2), single-call where it can only narrow or annotate. Wired into
+      `generate.answer_query_streaming` with `relevance_filter`/`coverage_check` kwargs
+      (default on) so `run_phase6.py` can A/B them. Full UI: two new live pipeline
+      steps ("Match to question", "Answer check"), a coverage caveat note in the
+      answer, `undefined`-safe for conversations stored before this existed. 22 new
+      tests (7 relevance, 6 coverage, 9 generate-level incl. an index-consistency
+      regression for the filter reordering passage numbers). Neither new stage is
+      labeled "L4"/"L5" — those map to the PRD's own 3 layers specifically. External
+      terminology: "a five-stage, fixed-sequence pipeline," not "multi-agent."
+- [x] Live-testing the relevance filter's very first real run found a genuine bug, not
+      the local model's usual non-determinism: a retrieved chunk was 79,710 characters
+      (a PDF line-wrap turned "...published in November 2012." into a false section
+      header "2012.", swallowing 40 pages into one chunk) — overflowed the local
+      model's context, and the filter's strict per-passage check is what surfaced it
+      (generation would have silently produced a partial-looking answer with no
+      error). Fixed at the source in `chunking.py` (reject 4-digit "section numbers"
+      in a plausible calendar-year range); that document went from 10 chunks to 56,
+      zero effect on the other 6, confirmed by re-running Phase 1 and diffing counts.
+      Index rebuilt afterward.
+- [x] A/B measurement against the 16-question eval set (`run_phase6.py
+      --no-relevance-filter` vs. default), required by the plan before trusting the
+      relevance filter rather than assuming it helps. Result went against the hoped-for
+      direction: false-refusal rate 4/11 without the filter, **6/11 with it**; citation
+      accuracy unchanged (4/11 either way); ~5s slower per question. Honored the plan's
+      own pre-committed rule ("if false refusals rise, cut the stage") rather than
+      rationalize the regression away — `relevance_filter` now defaults to `False` in
+      `generate.py`. Code/tests/CLI flag all stay for retuning later (raise `MIN_KEEP`,
+      loosen the prompt); this is "off by default," not "deleted." Fixed a real UI bug
+      the flip would otherwise have shipped (the relevance step would have spun forever
+      with the stage disabled — now hidden by default, self-activates from its own
+      event). Coverage check unaffected, stays on. Full numbers in decisions.md. 88
+      tests pass; live-verified the corrected defaults end-to-end in-browser.
+
 ## Notes
 - No fixed calendar — move to the next phase only when the current one is verified working.
 - Known limitation carried forward from Phase 1: TKDL itself isn't public (restricted to

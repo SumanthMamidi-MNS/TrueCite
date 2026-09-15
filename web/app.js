@@ -158,8 +158,20 @@ function answerHTML(res) {
           <button class="cite-pill" type="button" data-src="${esc(c.source ?? "")}">${esc(c.citation)}</button>
         </div>`).join("")}
     </div>
+    ${coverageHTML(res)}
     ${sourcesHTML(res.sources || [])}
     ${discardedHTML(discarded)}`;
+}
+
+function coverageHTML(res) {
+  // res.coverage is undefined for any conversation stored before this
+  // feature existed (replayed from localStorage), and null whenever the
+  // check failed open — both cases render nothing, same as "not assessed".
+  if (!res.coverage || res.coverage.addresses !== false) return "";
+  return `
+    <div class="coverage-note">
+      <strong>May not fully answer your question.</strong> ${esc(res.coverage.gap || "")}
+    </div>`;
 }
 
 function sourcesHTML(sources) {
@@ -385,10 +397,30 @@ function ask(question) {
       }
       setStep("gate", passed ? "done" : "failed",
         `best match ${best.toFixed(3)} — ${passed ? "clears" : "misses"} the ${threshold.toFixed(2)} limit`);
-      if (passed) setStep("generation", "active");
+      // Deliberately doesn't activate "relevance" or "generation" here — the
+      // relevance stage is off by default (see docs/decisions.md: it made
+      // the false-refusal rate worse in testing) and may not run at all, so
+      // each step activates itself from its own "start" event instead of
+      // being chained from the step before it.
+    }
+
+    if (ev.type === "stage" && ev.stage === "relevance" && ev.status === "start") {
+      stepEl("relevance").hidden = false;
+      setStep("relevance", "active");
+    }
+
+    if (ev.type === "stage" && ev.stage === "relevance" && ev.status === "done") {
+      setStep("relevance", "done",
+        ev.meta.failed_open
+          ? `Screening unavailable — all ${ev.meta.total} passages carried forward`
+          : `${ev.meta.kept} of ${ev.meta.total} passages kept${ev.meta.dropped ? ` · ${ev.meta.dropped} set aside as off-topic` : ""}`);
     }
 
     if (ev.type === "sources") sources = ev.sources;
+
+    if (ev.type === "stage" && ev.stage === "generation" && ev.status === "start") {
+      setStep("generation", "active");
+    }
 
     if (ev.type === "stage" && ev.stage === "generation" && ev.status === "done") {
       drafted = ev.meta.drafted;
@@ -419,6 +451,18 @@ function ask(question) {
       toBottom();
     }
 
+    if (ev.type === "stage" && ev.stage === "coverage" && ev.status === "start") {
+      setStep("cite", "done", "Citations resolved by authority and date");
+      setStep("coverage", "active");
+    }
+
+    if (ev.type === "stage" && ev.stage === "coverage" && ev.status === "done") {
+      setStep("coverage", "done",
+        !ev.meta.available ? "Not assessed"
+        : ev.meta.addresses ? "Addresses the question as asked"
+        : `May not fully cover: ${ev.meta.gap}`);
+    }
+
     if (ev.type === "complete" || ev.type === "refused") {
       const res = ev.result;
       res.sources = sources;
@@ -431,6 +475,7 @@ function ask(question) {
         setStep("cite", "done", "Citations resolved by authority and date");
         summary = `✓ Verified · ${res.claims.length} claim${res.claims.length === 1 ? "" : "s"} upheld` +
           ((res.discarded || []).length ? ` · ${res.discarded.length} discarded` : "") +
+          (res.coverage && res.coverage.addresses === false ? ` · may not fully answer` : "") +
           ` · ${sources.length} source${sources.length === 1 ? "" : "s"} · ${secs}s`;
       } else {
         const atGate = ev.refusal_stage === "gate";
@@ -443,6 +488,7 @@ function ask(question) {
           ? "Stopped before Layer 2 — passages were retrieved, but none supported a specific answer, so nothing was asserted rather than filling the gap."
           : "Stopped at Layer 2 — claims were drafted, but none survived checking against the passage they cited.";
         if (atGate) {
+          setStep("relevance", null, "Skipped — nothing confident enough to screen");
           setStep("generation", null, "Skipped — nothing confident enough to draft from");
           setStep("verification", null, "Skipped");
         } else if (drafted === 0) {
@@ -451,6 +497,7 @@ function ask(question) {
           setStep("verification", "failed", "No claim survived verification");
         }
         setStep("cite", null, "Skipped — nothing to cite");
+        setStep("coverage", null, "Skipped — no answer to check");
         summary = `Refused · ${atGate ? "no confident match" : "nothing verifiable"} · ${secs}s`;
       }
 

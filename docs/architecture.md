@@ -26,8 +26,10 @@ src/
   bm25_retrieval.py      # BM25 keyword retrieval, independent of the vector store
   hybrid_retrieval.py    # Reciprocal Rank Fusion of vector + BM25 rankings
   confidence_gate.py     # Layer 1: retrieval-distance threshold gate
+  relevance.py            # Stage 3 (not part of the PRD's 3 layers): non-blocking passage-relevance filter
   verification.py        # Layer 2: claim-support verification (majority vote)
   citation.py             # Layer 3: format_citation + resolve_authority
+  coverage.py              # Stage 5 (not part of the PRD's 3 layers): non-blocking answer-coverage check
   generate.py              # end-to-end pipeline: answer_query_streaming (events) + answer_query (wrapper)
   llm_client.py            # provider seam: Ollama (default/self-host), Gemini or Anthropic (deployment), via LLM_PROVIDER
   translation.py           # on-demand translation of an already-verified answer (see "Multilingual" below)
@@ -41,8 +43,9 @@ web/
   run_phase3.py   # Phase 3 gate script: vector-only vs. hybrid on 15 test questions
   run_phase5.py   # Phase 5 gate script: 3 hand-checked end-to-end queries (manual, live LLM calls)
   run_phase6.py   # Phase 6 gate script: the evaluation set, with metrics
-tests/            # pytest suite (46 tests): chunking, BM25, RRF fusion, authority, confidence gate,
-                  # verification, citation, generate — all mocked where a live model would be needed
+tests/            # pytest suite (88 tests): chunking, BM25, RRF fusion, authority, confidence gate,
+                  # relevance, verification, citation, coverage, generate, llm_client, translation —
+                  # all mocked where a live model would be needed
 requirements.txt
 .venv/            # local virtualenv, not committed
 ```
@@ -61,10 +64,14 @@ requirements.txt
    a. `retrieval.retrieve` (vector) and `hybrid_retrieval.retrieve_hybrid` (RRF of vector+BM25) both run.
    b. **Layer 1** (`confidence_gate`): refuses immediately if no *vector* hit clears distance 0.90 — checked on vector distance specifically, since that's what the threshold was calibrated against.
    c. Candidates are truncated to `top_k` by *hybrid* relevance rank first, then reordered by authority (`citation.resolve_authority`) only within that already-selected set — sorting the whole pool by authority before truncating was a real bug (see `docs/decisions.md`): it let lower-relevance, higher-authority chunks evict an actually-relevant one.
-   d. Generation asks the local LLM for a list of discrete claims, each tied to exactly one chunk_id — not free prose — so each claim can be independently checked next. The model is instructed to return zero claims rather than state anything not grounded in the given passages (verified working: it declined to fabricate a fee figure when asked one the corpus doesn't state).
-   e. **Layer 2** (`verification.verify_claim`): each claim is checked against its cited chunk's actual text, 3 times with majority vote (added after observing real non-determinism in the local model on a borderline coreference case — see `docs/decisions.md`). Unsupported claims are dropped, not shown.
-   f. Surviving claims are formatted with `citation.format_citation` (`[Source: <short name>, §<section>, effective <date>]`) and joined into the final answer. If every claim was dropped, refuse.
+   d. **Stage 3** (`relevance.judge_relevance` + `apply_relevance`, `relevance_filter=True` by default): one LLM call judges every candidate passage's topical relevance to the question at once, and passages judged clearly off-topic are set aside *before* generation sees them (never below `MIN_KEEP=3`, and never causing a refusal — see below). Not part of the PRD's 3 layers; added after live testing found Layer 1's vector-distance gate doesn't catch a passage that's simply about the wrong document. Fails open (keeps everything) on any error.
+   e. Generation asks the local LLM for a list of discrete claims, each tied to exactly one chunk_id (numbered against the *post-filter* passage list) — not free prose — so each claim can be independently checked next. The model is instructed to return zero claims rather than state anything not grounded in the given passages (verified working: it declined to fabricate a fee figure when asked one the corpus doesn't state).
+   f. **Layer 2** (`verification.verify_claim`): each claim is checked against its cited chunk's actual text, 3 times with majority vote (added after observing real non-determinism in the local model on a borderline coreference case — see `docs/decisions.md`). Unsupported claims are dropped, not shown.
+   g. Surviving claims are formatted with `citation.format_citation` (`[Source: <short name>, §<section>, effective <date>]`) and joined into the final answer. If every claim was dropped, refuse.
+   h. **Stage 5** (`coverage.assess_coverage`, `coverage_check=True` by default, skipped on any refusal path): one LLM call checks whether the *assembled answer* actually addresses the *original question* — distinct from Layer 2, which only ever checks a claim against its passage, never the answer against the question. Advisory only: it can annotate `result["coverage"]` with a short gap description, but can **never** modify `answer`/`claims`/`citations`, and can never cause a refusal. Fails open (no verdict) on any error.
 7. `authority.py` / `citation.py` hold the authority-level/effective-date metadata and the ranking/formatting logic Layer 3 needs.
+
+Stages 3 and 5 are deliberately **not** labeled "Layer 4/5" anywhere (code or UI) — the L1/L2/L3 tags map specifically to the PRD's own 3-layer defense (§6.2), and minting new layer numbers for additions beyond it would overclaim PRD alignment. External terminology: **"a five-stage, fixed-sequence verification pipeline"** — precise, not "multi-agent" (no planner, no dynamic routing, no tool use, no loops; see `docs/decisions.md`). Both stages are single-call, not majority-vote, on a rule that's now the project's standard: majority-vote where a call can delete content (Layer 2), single-call where it can only narrow or annotate (Stages 3 and 5) — tripling the cost only buys something where a wrong single call would otherwise silently drop a correct, grounded claim.
 
 Not yet exercised: a genuine two-version conflicting-rule case to validate "surface the current version" against real corpus content (none exists in this corpus — see `docs/phases.md` Phase 5).
 

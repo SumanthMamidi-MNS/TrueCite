@@ -31,7 +31,9 @@ import llm_client
 from authority import get_authority
 from citation import format_citation, resolve_authority
 from confidence_gate import CONFIDENCE_THRESHOLD, passes_confidence_gate
+from coverage import assess_coverage
 from hybrid_retrieval import retrieve_hybrid
+from relevance import apply_relevance, judge_relevance
 from retrieval import retrieve as retrieve_vector
 from verification import verify_claim
 
@@ -212,7 +214,13 @@ def _describe_source(hit: dict, index: int) -> dict:
     }
 
 
-def answer_query_streaming(query: str, top_k: int = 8, history: list[dict] | None = None):
+def answer_query_streaming(
+    query: str,
+    top_k: int = 8,
+    history: list[dict] | None = None,
+    relevance_filter: bool = False,
+    coverage_check: bool = True,
+):
     """Run the pipeline, yielding an event per stage as it happens.
 
     Same logic as answer_query (which is now a thin wrapper that drains this),
@@ -225,6 +233,20 @@ def answer_query_streaming(query: str, top_k: int = 8, history: list[dict] | Non
     (see `_condense_followup`) — it never reaches generation or verification
     directly, so a follow-up still can't be answered from anything but the
     corpus.
+
+    `relevance_filter` and `coverage_check` gate the two non-blocking stages
+    added alongside the PRD's 3-layer defense (see relevance.py / coverage.py
+    for why they're non-blocking and untagged in the UI, not "Layer 4/5").
+    `relevance_filter` defaults OFF: A/B'd against the 16-question eval set
+    (run_phase6.py) and it made the false-refusal rate worse, not better
+    (4/11 -> 6/11), with no gain in citation accuracy — it was dropping
+    load-bearing passages, exactly the risk flagged when it was built. See
+    docs/decisions.md for the numbers. The code stays in (relevance.py,
+    tests, the `relevance_filter=True` override) for retuning later — a
+    higher MIN_KEEP or a looser prompt might fix it — but it must not ship
+    on by default while it measurably hurts the metric that matters most.
+    `coverage_check` defaults on: advisory-only, can't cause a refusal, and
+    wasn't implicated by this measurement.
     """
     effective_query = query
     if history:
@@ -272,6 +294,38 @@ def answer_query_streaming(query: str, top_k: int = 8, history: list[dict] | Non
         yield {"type": "refused", "refusal_stage": "gate", "result": _refusal("gate")}
         return
 
+    if relevance_filter:
+        yield {"type": "stage", "stage": "relevance", "status": "start", "meta": {"total": len(hits)}}
+        try:
+            verdicts = judge_relevance(effective_query, hits)
+            hits, dropped = apply_relevance(hits, verdicts)
+            yield {
+                "type": "stage",
+                "stage": "relevance",
+                "status": "done",
+                "meta": {
+                    "failed_open": False,
+                    "total": len(hits) + len(dropped),
+                    "kept": len(hits),
+                    "dropped": len(dropped),
+                    "dropped_detail": dropped,
+                },
+            }
+        except Exception:
+            # Fail open — see relevance.py's docstring: this stage only ever
+            # narrows an already-Layer-1-approved set, so on any failure the
+            # safe default is to change nothing, not to guess a narrowing.
+            yield {
+                "type": "stage",
+                "stage": "relevance",
+                "status": "done",
+                "meta": {"failed_open": True, "total": len(hits), "kept": len(hits), "dropped": 0},
+            }
+
+    # sources/indices are built from `hits` AFTER the filter above, so a
+    # claim's `source` index (resolved via hits[source_num - 1] below) and
+    # every card in the UI's source rail always agree on which passage is
+    # which — filtering after this point would desynchronize the two.
     sources = [_describe_source(h, i) for i, h in enumerate(hits, start=1)]
     yield {"type": "sources", "sources": sources}
 
@@ -367,12 +421,48 @@ def answer_query_streaming(query: str, top_k: int = 8, history: list[dict] | Non
         "claims": verified_claims,
         "discarded": discarded_claims,
     }
+
+    if coverage_check:
+        # Never runs on a refusal path (both `return`s above already exited)
+        # — there is no answer to assess, and spending a call to conclude
+        # "this refusal doesn't answer the question" wastes latency on the
+        # path the user is already unhappy with.
+        yield {"type": "stage", "stage": "coverage", "status": "start"}
+        try:
+            verdict = assess_coverage(effective_query, result["answer"])
+            result["coverage"] = verdict
+            yield {
+                "type": "stage",
+                "stage": "coverage",
+                "status": "done",
+                "meta": {
+                    "available": True,
+                    "addresses": verdict["addresses"],
+                    "gap": verdict["gap"],
+                    "assessed_against": effective_query,
+                },
+            }
+        except Exception:
+            # Fail open — see coverage.py's docstring: no verdict, never a
+            # negative one guessed from a failure, and the answer already
+            # assembled above renders exactly as if this stage didn't run.
+            result["coverage"] = None
+            yield {"type": "stage", "stage": "coverage", "status": "done", "meta": {"available": False}}
+
     yield {"type": "complete", "result": result}
 
 
-def answer_query(query: str, top_k: int = 8, history: list[dict] | None = None) -> dict:
+def answer_query(
+    query: str,
+    top_k: int = 8,
+    history: list[dict] | None = None,
+    relevance_filter: bool = False,
+    coverage_check: bool = True,
+) -> dict:
     """Returns {"refused": bool, "answer": str, "citations": list[str], "claims": list[dict]}."""
-    for event in answer_query_streaming(query, top_k, history=history):
+    for event in answer_query_streaming(
+        query, top_k, history=history, relevance_filter=relevance_filter, coverage_check=coverage_check
+    ):
         if event["type"] in ("complete", "refused"):
             return event["result"]
     return _refusal("verification")
