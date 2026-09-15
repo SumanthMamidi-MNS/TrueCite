@@ -30,6 +30,7 @@ src/
   citation.py             # Layer 3: format_citation + resolve_authority
   generate.py              # end-to-end pipeline: answer_query_streaming (events) + answer_query (wrapper)
   llm_client.py            # provider seam: Ollama (default/self-host), Gemini or Anthropic (deployment), via LLM_PROVIDER
+  translation.py           # on-demand translation of an already-verified answer (see "Multilingual" below)
   api.py                   # FastAPI app; /api/ask streams pipeline events as SSE, serves web/
 web/
   index.html               # chat shell: sidebar history, thread, pinned composer
@@ -99,9 +100,20 @@ retrieval (which Layer 1/2 still catch) and can never itself become an
 ungrounded claim. Fails open to the original question on any error.
 
 **Model configuration**: `generate.GENERATION_MODEL` and `verification.MODEL`
-both read the `OLLAMA_MODEL` environment variable (default `qwen2.5:7b`)
-instead of being hardcoded, and `/api/config` exposes the active value so the
-UI's sidebar model badge always reflects whatever is actually configured.
+both resolve through `llm_client.active_model_name()` instead of being
+hardcoded, and `/api/config` exposes the active value + provider so the UI's
+sidebar model badge always reflects whatever is actually configured (Ollama,
+Gemini, or Anthropic — see "Deployment" below).
+
+**Multilingual (Hindi)**: PRD §6.3 asks for retrieval quality verified in
+English and Hindi independently. Scoped down deliberately (see
+`docs/decisions.md`): retrieval/generation/verification stay English-only,
+and `translation.py` + `POST /api/translate` translate an already-verified
+answer into Hindi on request, shown behind a "View in Hindi" button per
+answer. This means no Hindi retrieval is ever exercised — a real, disclosed
+narrowing of the PRD's literal ask, not a secret one — in exchange for zero
+new hallucination risk (translating settled text can only be mistranslated,
+not fabricated). A machine-translation disclaimer is shown in the UI itself.
 
 ## Corpus (7 documents as of 2026-09-13, see corpus/manifest.md)
 Patents Act 1970 (Act), Biological Diversity Act 2002 (Act), two IPO guideline

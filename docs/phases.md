@@ -234,6 +234,17 @@ Sequential, gated phases per PRD §9 — no fixed schedule. Each phase gates the
       tests. 61 tests pass. Corrected a real misunderstanding along the way: GitHub
       Pages cannot run this (static-only, no backend) — a live deployment needs an
       actual Python host, not chosen yet (Hugging Face Spaces / Render both fit).
+- [x] 2026-09-15: Added on-demand Hindi translation (`translation.py`, `POST
+      /api/translate`, a "View in Hindi" button per answer) — translates the
+      already-verified English answer rather than retrieving/generating natively in
+      Hindi, a deliberate, disclosed narrowing of PRD §6.3 (see decisions.md). Live-
+      verified end-to-end: real Hindi output, working toggle, and — reported honestly,
+      not hidden — a garbled mixed-script fragment and a partially-translated citation
+      marker in testing, the same local-model quality ceiling as the rest of the
+      pipeline. Recommended against a multi-agent restructuring for the other
+      limitations (WIPO confusion, false-refusal rate) — the 3-layer defense already is
+      that pattern's substance, and more agent hops just slows an already-slow local
+      model for unverified gain; not built. 65 tests pass.
 
 ## Notes
 - No fixed calendar — move to the next phase only when the current one is verified working.

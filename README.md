@@ -147,8 +147,11 @@ own "Understand follow-up" step — but the rewrite itself is never verified,
 only the answer is, so a confusing follow-up may retrieve the wrong passages
 rather than the right ones (in which case the pipeline still refuses instead
 of guessing). The sidebar footer names the model actually running, read from
-the `OLLAMA_MODEL` environment variable, so it never goes stale if the model
-is swapped.
+the active provider, so it never goes stale if the model is swapped.
+
+Each answer has a **"View in Hindi" button** — translates the already-
+verified English answer on request (`/api/translate`), rather than
+retrieving/generating natively in Hindi; see "Known limitations" for why.
 
 To use the pipeline directly instead:
 ```python
@@ -224,9 +227,18 @@ discovered later by someone else:
   corpus's two guideline documents (2012, 2025) complement rather than
   supersede each other — so this behavior is verified with synthetic data,
   not a real example from the corpus.
-- **No Hindi content yet.** PRD §6.3 requires verifying retrieval quality in
-  English and Hindi independently; the corpus is English-only so far, so
-  multilingual retrieval quality is unverified.
+- **Hindi is a translation layer, not native retrieval.** PRD §6.3 asks for
+  retrieval quality verified in English and Hindi independently. Retrieval,
+  generation, and Layer 2 stay English-only (deliberately — see
+  `docs/decisions.md`); a "View in Hindi" button on each answer translates
+  the already-verified English text on request instead. This narrows what
+  the PRD literally asks for — no Hindi retrieval is ever exercised, so
+  there's nothing to verify there — in exchange for zero new hallucination
+  risk (translating settled text can only be mistranslated, not fabricated).
+  Translation quality itself inherits the same local-model ceiling as
+  everything else — observed live: a real but minor instruction-following
+  slip (a citation marker partly translated) and a genuine mixed-script
+  glitch in one run. Machine-translation disclaimer shown in the UI itself.
 - **Not production-scale.** Single-user, local-only, no concurrency handling
   — matches the PRD's stated non-goals for this phase.
 

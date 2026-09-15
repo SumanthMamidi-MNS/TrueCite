@@ -201,6 +201,10 @@ function actionsHTML() {
         <svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
         Copy with citations
       </button>
+      <button class="act-btn translate-btn" type="button">
+        <svg viewBox="0 0 24 24"><path d="M4 6h9M8 3v3m0 0c0 4-2.5 7-6 8.5M8 6c1.4 2.6 3.5 4.5 6 5.7M13 21l4-9 4 9M14.5 18h5"/></svg>
+        <span class="translate-label">हिंदी में देखें</span>
+      </button>
     </div>`;
 }
 
@@ -222,18 +226,64 @@ function wireAnswer(body, res) {
       setTimeout(() => card.classList.remove("flash"), 1100);
     }));
 
+  const answerText = () =>
+    res.refused ? res.answer : res.claims.map((c) => `${c.text} ${c.citation}`).join("\n\n");
+
   const copy = $(".copy-btn", body);
   if (copy) copy.addEventListener("click", async () => {
-    const text = res.refused
-      ? res.answer
-      : res.claims.map((c) => `${c.text} ${c.citation}`).join("\n\n");
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(answerText());
       copy.classList.add("copied");
       copy.lastChild.textContent = " Copied";
       setTimeout(() => { copy.classList.remove("copied"); copy.lastChild.textContent = " Copy with citations"; }, 1600);
     } catch { /* clipboard blocked — nothing useful to do */ }
   });
+
+  const translateBtn = $(".translate-btn", body);
+  if (translateBtn) translateBtn.addEventListener("click", () => translateAnswer(body, translateBtn, answerText()));
+}
+
+async function translateAnswer(body, btn, text) {
+  let panel = $(".translation", body);
+
+  // Already fetched once — this click is just a show/hide toggle, no refetch.
+  if (panel) {
+    const showing = panel.hidden;
+    panel.hidden = !showing;
+    $(".translate-label", btn).textContent = showing ? "अंग्रेज़ी में देखें" : "हिंदी में देखें";
+    return;
+  }
+
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const label = $(".translate-label", btn);
+  const originalLabel = label.textContent;
+  label.textContent = "अनुवाद हो रहा है…";
+
+  try {
+    const res = await fetch("/api/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, language: "Hindi" }),
+    });
+    if (!res.ok) throw new Error(String(res.status));
+    const { translated } = await res.json();
+
+    panel = document.createElement("div");
+    panel.className = "translation";
+    panel.innerHTML = `
+      <p class="translation-note">मशीन अनुवाद — मूल अंग्रेज़ी उत्तर के आधार पर, स्रोत के विरुद्ध स्वतंत्र रूप से सत्यापित नहीं (Machine translation of the verified English answer — not independently re-checked against the source).</p>
+      <p class="translation-text"></p>`;
+    $(".translation-text", panel).textContent = translated;
+    body.insertBefore(panel, $(".msg-actions", body));
+    label.textContent = "अंग्रेज़ी में देखें";
+  } catch {
+    label.textContent = originalLabel;
+    btn.classList.add("translate-error");
+    setTimeout(() => btn.classList.remove("translate-error"), 1600);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function replayAssistant(res, meta = {}) {

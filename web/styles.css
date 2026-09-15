@@ -357,6 +357,16 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 .act-btn svg { width: 13px; height: 13px; stroke: currentColor; stroke-width: 1.7; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .act-btn:hover { color: var(--text); border-color: var(--line-strong); background: rgba(255,255,255,.035); }
 .act-btn.copied { color: var(--green); border-color: rgba(86,217,163,.35); }
+.act-btn.translate-error { color: var(--amber); border-color: rgba(240,179,78,.4); }
+.act-btn[disabled] { opacity: .6; cursor: progress; }
+
+.translation {
+  margin-top: .9rem; padding: .85rem 1rem; border-radius: var(--radius);
+  background: rgba(224,163,85,.05); border: 1px solid rgba(224,163,85,.18);
+  animation: riseIn .3s var(--ease) both;
+}
+.translation-note { font-size: .72rem; color: var(--text-mute); margin-bottom: .5rem; line-height: 1.5; }
+.translation-text { font-size: .96rem; line-height: 1.75; color: var(--text); }
 
 /* ══════════ composer ══════════ */
 

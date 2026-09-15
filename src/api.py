@@ -15,15 +15,17 @@ import json
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import llm_client  # noqa: E402
 from authority import DOC_AUTHORITY  # noqa: E402
 from generate import MAX_HISTORY_TURNS, answer_query_streaming  # noqa: E402
+from translation import translate_answer  # noqa: E402
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
@@ -81,6 +83,25 @@ def ask(q: str, history: str = "[]"):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+class TranslateRequest(BaseModel):
+    text: str
+    language: str = "Hindi"
+
+
+@app.post("/api/translate")
+def translate(req: TranslateRequest):
+    """Translate an already-composed answer on request — see translation.py's
+    docstring for why this runs on the finished English answer rather than
+    natively in the target language. Not part of the SSE pipeline: this
+    always runs after an answer already exists, as a separate user action."""
+    try:
+        return {"translated": translate_answer(req.text, req.language)}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Translation unavailable ({type(exc).__name__}): {exc}"
+        )
 
 
 @app.get("/api/config")
