@@ -1,0 +1,102 @@
+{
+  "_about": "Held-out evaluation set. Authored 2026-09-16 AFTER all pipeline tuning on the development set (src/run_phase6.py ANSWERABLE/UNANSWERABLE), and BEFORE this set was ever run through the pipeline. Pre-commitment: no pipeline, prompt, retrieval, or ground-truth change is made in response to results on this set; its numbers are reported exactly as measured. Every gold chunk was opened and read to confirm it states the expected answer; every unanswerable question was grep-checked against corpus/processed to confirm the corpus does not contain the answer. Questions are phrased the way a user would ask them, deliberately not copying passage wording.",
+  "answerable": [
+    {
+      "id": "H1",
+      "query": "Can a method of treating human patients with a herbal remedy be patented in India?",
+      "expected": "No. Section 3(i) of the Patents Act, 1970 excludes any process for the medicinal, curative, therapeutic or other treatment of human beings from being an invention.",
+      "expected_doc_ids": ["patents_act_1970", "ipo_ayush_examination_guidelines_2025"],
+      "gold_chunks": ["patents_act_1970::sec-3-clause-i", "ipo_ayush_examination_guidelines_2025::sec-2-part-4"]
+    },
+    {
+      "id": "H2",
+      "query": "Are medicinal plants themselves patentable in India?",
+      "expected": "No. Section 3(j) excludes plants and animals in whole or any part thereof (other than micro-organisms), including seeds, varieties and species.",
+      "expected_doc_ids": ["patents_act_1970", "ipo_ayush_examination_guidelines_2025"],
+      "gold_chunks": ["patents_act_1970::sec-3-clause-j", "ipo_ayush_examination_guidelines_2025::sec-2-part-4"]
+    },
+    {
+      "id": "H3",
+      "query": "Does a person living in India need permission before filing a patent application in another country?",
+      "expected": "Yes, a written permit from the Controller is required, unless an application for the same invention was filed in India at least six weeks before the foreign application (and no secrecy direction applies). Section 39.",
+      "expected_doc_ids": ["patents_act_1970"],
+      "gold_chunks": ["patents_act_1970::sec-39"]
+    },
+    {
+      "id": "H4",
+      "query": "Who needs approval from the National Biodiversity Authority before obtaining biological resources from India for research?",
+      "expected": "Non-citizens, non-resident Indian citizens, and bodies corporate not incorporated/registered in India (or with non-Indian participation in share capital or management). Section 3 of the Biological Diversity Act, 2002.",
+      "expected_doc_ids": ["biological_diversity_act_2002"],
+      "gold_chunks": ["biological_diversity_act_2002::sec-3"]
+    },
+    {
+      "id": "H5",
+      "query": "Does an Indian company have to notify anyone before collecting a biological resource for commercial use?",
+      "expected": "Yes, it must give prior intimation to the State Biodiversity Board concerned. Section 7 of the Biological Diversity Act, 2002.",
+      "expected_doc_ids": ["biological_diversity_act_2002"],
+      "gold_chunks": ["biological_diversity_act_2002::sec-7"]
+    },
+    {
+      "id": "H6",
+      "query": "Are traditional vaids and hakims exempt from the State Biodiversity Board intimation requirement?",
+      "expected": "Yes. The proviso to Section 7 exempts local people and communities, including growers, cultivators, and vaids and hakims practising indigenous medicine.",
+      "expected_doc_ids": ["biological_diversity_act_2002"],
+      "gold_chunks": ["biological_diversity_act_2002::sec-7"]
+    },
+    {
+      "id": "H7",
+      "query": "When does the WIPO treaty on genetic resources and associated traditional knowledge come into force?",
+      "expected": "Three months after 15 eligible parties have deposited their instruments of ratification or accession (Article 17). It is not yet in force.",
+      "expected_doc_ids": ["wipo_gratk_treaty_2024"],
+      "gold_chunks": ["wipo_gratk_treaty_2024::article-17"]
+    },
+    {
+      "id": "H8",
+      "query": "Can research results about Indian biological resources be handed over to a foreign company without any approval?",
+      "expected": "No. Transferring such research results to a non-citizen, non-resident Indian, or foreign/foreign-participated body corporate requires previous approval of the National Biodiversity Authority. Section 4 of the Biological Diversity Act, 2002.",
+      "expected_doc_ids": ["biological_diversity_act_2002"],
+      "gold_chunks": ["biological_diversity_act_2002::sec-4"]
+    },
+    {
+      "id": "H9",
+      "query": "Can anyone object to a patent application in India after it is published but before the patent is granted?",
+      "expected": "Yes. Under Section 25(1), any person may file a representation by way of opposition to the Controller on specified grounds after publication and before grant.",
+      "expected_doc_ids": ["patents_act_1970"],
+      "gold_chunks": ["patents_act_1970::sec-25-sub-1"]
+    },
+    {
+      "id": "H10",
+      "query": "How is the Indian Patent Office supposed to classify patent applications that involve traditional knowledge?",
+      "expected": "They must be correctly identified, screened and classified as 'Traditional Knowledge' by the RECS Section, with appropriate IPC classification so they are routed to the right examination group. 2012 TK guidelines, paragraph 7.",
+      "expected_doc_ids": ["ipo_tk_biological_material_guidelines_2012"],
+      "gold_chunks": ["ipo_tk_biological_material_guidelines_2012::sec-7"]
+    }
+  ],
+  "unanswerable": [
+    {
+      "id": "HU1",
+      "query": "How long does a pharmaceutical patent last in the United States?",
+      "why_unanswerable": "The corpus only states India's patent term (Patents Act s.53). A correct system must not transfer India's term to the US."
+    },
+    {
+      "id": "HU2",
+      "query": "How much does it cost to subscribe to the TKDL database?",
+      "why_unanswerable": "No TKDL fee/cost/subscription information anywhere in the corpus (grep-checked)."
+    },
+    {
+      "id": "HU3",
+      "query": "Which countries have ratified the WIPO GRATK treaty so far?",
+      "why_unanswerable": "The treaty text describes the ratification process (Articles 12, 13, 17, 18) but contains no list of ratifying countries."
+    },
+    {
+      "id": "HU4",
+      "query": "What is the recommended daily dosage of Ashwagandha?",
+      "why_unanswerable": "Ashwagandha appears only as a patent-examination illustration in the AYUSH guidelines; no dosage anywhere (grep-checked)."
+    },
+    {
+      "id": "HU5",
+      "query": "What did the Supreme Court decide in Novartis v. Union of India?",
+      "why_unanswerable": "Neither 'Novartis' nor 'Supreme Court' appears anywhere in the corpus (grep-checked)."
+    }
+  ]
+}

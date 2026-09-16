@@ -1,0 +1,102 @@
+{
+  "_about": "Held-out evaluation set v2. Authored and frozen 2026-09-16, AFTER held-out set v1 (docs/heldout_questions.json) exposed a short-chunk retrieval defect, and BEFORE the contextual-header fix for that defect was ever measured on anything. v1 motivated the fix, so v1 is no longer held-out for it; v2 exists to test whether that fix generalizes to questions it was never shaped by. Several targets are deliberately short chunks (GRATK Article 20 = 77 chars, BDA s.58 = 115 chars, AYUSH para 5 = 120 chars), the defect class the fix claims to address. Pre-commitment: no pipeline, prompt, retrieval, or ground-truth change is made in response to results on this set; numbers are reported exactly as measured. Every gold chunk was opened and read to confirm it states the expected answer; every unanswerable question was grep-checked against corpus/processed.",
+  "answerable": [
+    {
+      "id": "V1",
+      "query": "How long is a patent valid for in India?",
+      "expected": "Twenty years from the date of filing of the application (Patents Act, 1970, section 53).",
+      "expected_doc_ids": ["patents_act_1970"],
+      "gold_chunks": ["patents_act_1970::sec-53"]
+    },
+    {
+      "id": "V2",
+      "query": "Where is the National Biodiversity Authority headquartered?",
+      "expected": "Chennai (Biological Diversity Act, 2002, section 8(3)).",
+      "expected_doc_ids": ["biological_diversity_act_2002"],
+      "gold_chunks": ["biological_diversity_act_2002::sec-8"]
+    },
+    {
+      "id": "V3",
+      "query": "Are offences under the Biological Diversity Act bailable?",
+      "expected": "No. Offences under the Act are cognizable and non-bailable (section 58).",
+      "expected_doc_ids": ["biological_diversity_act_2002"],
+      "gold_chunks": ["biological_diversity_act_2002::sec-58"]
+    },
+    {
+      "id": "V4",
+      "query": "Who can declare an area a biodiversity heritage site in India?",
+      "expected": "The State Government, in consultation with local bodies, by notification in the Official Gazette (section 37).",
+      "expected_doc_ids": ["biological_diversity_act_2002"],
+      "gold_chunks": ["biological_diversity_act_2002::sec-37"]
+    },
+    {
+      "id": "V5",
+      "query": "Can a country join the WIPO genetic resources treaty while making reservations to it?",
+      "expected": "No. No reservations to the Treaty are permitted (Article 20).",
+      "expected_doc_ids": ["wipo_gratk_treaty_2024"],
+      "gold_chunks": ["wipo_gratk_treaty_2024::article-20"]
+    },
+    {
+      "id": "V6",
+      "query": "Does the WIPO GRATK treaty's disclosure obligation apply to patent applications filed before the treaty took effect?",
+      "expected": "No. A Contracting Party shall not impose the Treaty's obligations on applications filed before its entry into force for that party, without prejudice to existing national disclosure laws (Article 4).",
+      "expected_doc_ids": ["wipo_gratk_treaty_2024"],
+      "gold_chunks": ["wipo_gratk_treaty_2024::article-4"]
+    },
+    {
+      "id": "V7",
+      "query": "Under the WIPO GRATK treaty, does an applicant get a chance to correct a missing origin disclosure before being penalised?",
+      "expected": "Yes. Each Contracting Party shall provide an opportunity to rectify a failure to disclose before sanctions or remedies, though cases of fraudulent conduct or intent may be excluded (Article 5.2 and 5.2(bis)).",
+      "expected_doc_ids": ["wipo_gratk_treaty_2024"],
+      "gold_chunks": ["wipo_gratk_treaty_2024::article-5"]
+    },
+    {
+      "id": "V8",
+      "query": "What happens to an Indian patent application if the applicant files abroad without the required permission?",
+      "expected": "The Indian application is deemed abandoned, and any patent granted is liable to be revoked under section 64 (Patents Act, section 40, for contravention of section 39).",
+      "expected_doc_ids": ["patents_act_1970"],
+      "gold_chunks": ["patents_act_1970::sec-40"]
+    },
+    {
+      "id": "V9",
+      "query": "What should a patent examiner do if an application does not disclose the source and geographical origin of the biological material it uses?",
+      "expected": "Raise an objection, in conformity with section 10(4) of the Patents Act (2012 TK/Biological Material guidelines, paragraph 17).",
+      "expected_doc_ids": ["ipo_tk_biological_material_guidelines_2012", "patents_act_1970"],
+      "gold_chunks": ["ipo_tk_biological_material_guidelines_2012::sec-17"]
+    },
+    {
+      "id": "V10",
+      "query": "Which repository run by the Ministry of Tribal Affairs is listed in the AYUSH examination guidelines?",
+      "expected": "The Tribal Digital Document Repository (repository.tribal.gov.in) (2025 AYUSH guidelines, paragraph 5).",
+      "expected_doc_ids": ["ipo_ayush_examination_guidelines_2025"],
+      "gold_chunks": ["ipo_ayush_examination_guidelines_2025::sec-5"]
+    }
+  ],
+  "unanswerable": [
+    {
+      "id": "VU1",
+      "query": "Is turmeric patented in the United States?",
+      "why_unanswerable": "'turmeric' does not appear anywhere in the corpus (grep-checked)."
+    },
+    {
+      "id": "VU2",
+      "query": "What is the GST rate on Ayurvedic medicines in India?",
+      "why_unanswerable": "No GST / goods and services tax content anywhere in the corpus (grep-checked)."
+    },
+    {
+      "id": "VU3",
+      "query": "How many patents did the Indian Patent Office grant in 2024?",
+      "why_unanswerable": "No 2024 grant statistics in the corpus; the only grant figures are the PIB release's March-2013 Ayurveda-specific counts, which must not be transferred to 2024."
+    },
+    {
+      "id": "VU4",
+      "query": "What is the helpline number of the Indian Patent Office?",
+      "why_unanswerable": "No helpline/telephone information anywhere in the corpus (grep-checked)."
+    },
+    {
+      "id": "VU5",
+      "query": "What was the outcome of the Basmati rice patent dispute?",
+      "why_unanswerable": "'basmati' does not appear anywhere in the corpus (grep-checked)."
+    }
+  ]
+}
