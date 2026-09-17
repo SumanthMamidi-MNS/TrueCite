@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>linkedin</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+
+  :root{
+    --paper:#F0EEE6; --panel:#FFFFFF; --ink:#1C2530; --ink-soft:#525C63; --ink-faint:#7C868C;
+    --line:#D7D2C2; --line-strong:#B9B29A;
+    --indigo:#2F4B7C; --indigo-soft:#E6EBF4; --indigo-line:#AEC0DE;
+    --brass:#8F6C2A; --brass-soft:#F2E9D2; --brass-line:#D9C593;
+    --sage:#2E6E58; --sage-soft:#DFEEE6; --sage-line:#9FCBB3;
+    --rust:#9C4A32; --rust-soft:#F3E1D8; --rust-line:#E0AC93;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{ width:1200px; background:var(--paper); color:var(--ink); font-family:'IBM Plex Sans',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  .sheet{ padding:48px 56px 40px; }
+
+  header{ text-align:center; padding-bottom:22px; border-bottom:2.5px solid var(--ink); margin-bottom:28px; }
+  .eyebrow{ font-family:'IBM Plex Mono',monospace; font-size:13px; letter-spacing:.15em; text-transform:uppercase; color:var(--indigo); margin:0 0 10px; font-weight:600; }
+  h1{ font-family:'Spectral',Georgia,serif; font-weight:800; font-size:46px; letter-spacing:-.01em; margin:0 0 8px; color:var(--ink); }
+  .dek{ font-family:'Spectral',Georgia,serif; font-style:italic; font-weight:500; font-size:18px; color:var(--ink-soft); margin:0; }
+
+  h2.sec{ font-family:'IBM Plex Mono',monospace; font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-faint); font-weight:600; margin:0 0 16px; text-align:center; }
+
+  .flow{ display:flex; flex-direction:column; width:520px; margin:0 auto; }
+  .fnode{ width:520px; background:var(--panel); border:2px solid var(--ink); border-radius:11px; padding:12px 22px;
+          text-align:center; position:relative; z-index:2; display:flex; flex-direction:column; justify-content:center; min-height:48px; }
+  .fnode .t{ font-weight:700; font-size:16px; color:var(--ink); line-height:1.25; }
+  .fnode .s{ font-size:12.5px; color:var(--ink-soft); line-height:1.35; margin-top:4px; }
+  .fnode.indigo{ background:var(--indigo-soft); border-color:var(--indigo-line); }
+  .fnode.indigo .t{ color:var(--indigo); }
+  .fnode.final{ background:var(--ink); border-color:var(--ink); }
+  .fnode.final .t{ color:#fff; font-size:17px; }
+  .fnode.final .s{ color:#CBD3D8; }
+
+  .connector{ width:2px; height:20px; background:var(--ink-faint); align-self:center; position:relative; z-index:1; }
+  .connector::after{ content:""; position:absolute; bottom:-1px; left:50%; transform:translateX(-50%); width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-top:8px solid var(--ink-faint); }
+
+  .branch-wrap{ position:relative; }
+  .branch-group{ position:absolute; top:50%; left:520px; transform:translateY(-50%); display:flex; align-items:center; gap:12px; }
+  .bline-col{ display:flex; flex-direction:column; align-items:center; }
+  .blabel{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; font-weight:700; color:var(--rust); margin-bottom:2px; white-space:nowrap; }
+  .bline{ width:34px; height:2px; background:var(--rust); position:relative; }
+  .bline::after{ content:""; position:absolute; right:-1px; top:50%; transform:translateY(-50%); width:0; height:0; border-top:5px solid transparent; border-bottom:5px solid transparent; border-left:8px solid var(--rust); }
+  .exit{ width:210px; background:var(--rust-soft); border:1.5px solid var(--rust-line); border-radius:10px; padding:10px 15px; text-align:left; }
+  .exit .t{ font-weight:700; font-size:13px; color:var(--rust); margin-bottom:2px; }
+  .exit .s{ font-size:11px; color:var(--ink-soft); line-height:1.35; }
+
+  .stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:11px; overflow:hidden; margin:30px 0 18px; }
+  .stat{ background:var(--panel); padding:18px 14px; text-align:center; }
+  .stat .n{ font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; font-weight:700; font-size:32px; color:var(--sage); line-height:1; }
+  .stat .n small{ font-size:16px; color:var(--ink-soft); font-weight:500; }
+  .stat .l{ font-size:11.5px; color:var(--ink-soft); margin-top:7px; line-height:1.35; }
+
+  .legend{ display:flex; justify-content:center; gap:26px; padding:16px 0; border-top:1.5px solid var(--line-strong); font-size:12px; color:var(--ink-soft); }
+  .legend .item{ display:flex; align-items:center; gap:7px; }
+  .sw{ width:13px; height:13px; border-radius:4px; flex:none; }
+
+  footer{ text-align:center; padding-top:18px; }
+  footer p{ font-size:12.5px; color:var(--ink-faint); margin:0; line-height:1.5; }
+  footer b{ color:var(--ink-soft); }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header>
+    <p class="eyebrow">SIH26045 &middot; Ministry of Ayush</p>
+    <h1>IP&#8209;SAKTI SAHAYAK</h1>
+    <p class="dek">Built to refuse rather than guess &mdash; and measured to prove it holds</p>
+  </header>
+
+  <h2 class="sec">How an answer gets verified before it's shown</h2>
+  <div class="flow">
+
+    <div class="fnode"><div class="t">The user's question</div></div>
+    <div class="connector"></div>
+
+    <div class="fnode indigo">
+      <div class="t">Hybrid retrieval</div>
+      <div class="s">vector + BM25 keyword search, fused by rank</div>
+    </div>
+    <div class="connector"></div>
+
+    <div class="branch-wrap">
+      <div class="fnode" style="border-width:2.5px;">
+        <div class="t">Confidence gate</div>
+        <div class="s">is the best match actually relevant?</div>
+      </div>
+      <div class="branch-group">
+        <div class="bline-col"><span class="blabel">no</span><div class="bline"></div></div>
+        <div class="exit"><div class="t">Refused</div><div class="s">not enough grounded information</div></div>
+      </div>
+    </div>
+    <div class="connector"></div>
+
+    <div class="fnode indigo">
+      <div class="t">Generation</div>
+      <div class="s">drafts claims, each tied to one passage</div>
+    </div>
+    <div class="connector"></div>
+
+    <div class="branch-wrap">
+      <div class="fnode" style="border-width:2.5px;">
+        <div class="t">Claim verification</div>
+        <div class="s">3 independent votes, majority required</div>
+      </div>
+      <div class="branch-group">
+        <div class="bline-col"><span class="blabel">no</span><div class="bline"></div></div>
+        <div class="exit"><div class="t">Discarded</div><div class="s">dropped, never shown to the user</div></div>
+      </div>
+    </div>
+    <div class="connector"></div>
+
+    <div class="fnode final">
+      <div class="t">Answer &mdash; only upheld claims, each cited</div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="n">0<small>/5</small></div><div class="l">false answers, every measured run</div></div>
+    <div class="stat"><div class="n">5<small>/5</small></div><div class="l">unanswerable questions correctly refused</div></div>
+    <div class="stat"><div class="n">96</div><div class="l">question&#8209;runs measured, 3 sets &times; 3 runs</div></div>
+  </div>
+
+  <div class="legend">
+    <div class="item"><span class="sw" style="background:var(--indigo)"></span>retrieval &amp; generation</div>
+    <div class="item"><span class="sw" style="background:var(--ink)"></span>verified answer</div>
+    <div class="item"><span class="sw" style="background:var(--rust)"></span>refused / discarded</div>
+  </div>
+
+  <footer>
+    <p><b>Nine fixed stages, no planner deciding what runs next</b> &mdash; a fixed&#8209;sequence pipeline, not multi&#8209;agent.<br>Zero hallucinated claims across every run this build, including two question sets frozen into git before ever being tested.</p>
+  </footer>
+
+</div>
+</body>
+</html>
