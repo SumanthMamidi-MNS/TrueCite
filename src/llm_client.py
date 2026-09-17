@@ -19,10 +19,58 @@ docs/decisions.md). Re-verify whichever one is actually deployed before
 trusting its numbers.
 """
 import os
+import time
 
 import requests
 
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama").lower()
+
+
+class ProviderRateLimited(Exception):
+    """Raised when the configured cloud provider reports a rate-limit/quota
+    condition (HTTP 429 or the provider SDK's own equivalent) — a distinct,
+    temporary INFRASTRUCTURE state, never to be conflated with Layer 1/2
+    deciding the corpus doesn't support an answer. See generate.py's handling
+    in answer_query_streaming for why this matters: this project's whole
+    design principle is "know when you don't know", and a rate limit is not
+    that — it is "know when the model is temporarily unreachable" instead.
+    The original provider exception's message is preserved (str(exc)) so the
+    underlying cause is never lost, only reclassified.
+
+    Ollama (the local default) has no rate-limit concept and never raises
+    this — see _complete_ollama, deliberately untouched by any of this.
+    """
+
+
+# How long to wait before each retry after a rate-limited call, in seconds —
+# 2 short retries (not more): a genuinely transient limit often clears within
+# a few seconds, but a hard quota exhaustion (the likely case on Gemini's
+# free tier, what this whole feature exists for) won't clear no matter how
+# long we wait, so retrying longer or more times would only make the user
+# wait longer for the same outcome.
+_RATE_LIMIT_BACKOFFS_SEC = (1, 3)
+
+
+def _complete_with_rate_limit_retry(call, is_rate_limited):
+    """Run `call()` (a zero-arg thunk performing one provider request),
+    retrying with backoff only while the raised exception is recognized as a
+    rate-limit/quota condition per `is_rate_limited(exc)`. Any other
+    exception propagates immediately, unchanged — this function only ever
+    reclassifies rate-limit errors, nothing else. After the backoff schedule
+    is exhausted, raises ProviderRateLimited with the last attempt's message.
+    """
+    last_exc = None
+    for delay in (0,) + _RATE_LIMIT_BACKOFFS_SEC:
+        if delay:
+            time.sleep(delay)
+        try:
+            return call()
+        except Exception as exc:
+            if not is_rate_limited(exc):
+                raise
+            last_exc = exc
+    raise ProviderRateLimited(str(last_exc)) from last_exc
+
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:7b")
@@ -61,6 +109,11 @@ def estimate_tokens(text: str) -> int:
 
 
 def _complete_ollama(prompt: str, timeout: int, temperature: float, seed: int | None) -> str:
+    # Deliberately does NOT go through _complete_with_rate_limit_retry — a
+    # local Ollama server has no rate-limit/quota concept, and its failure
+    # mode is `requests.exceptions.HTTPError` (from raise_for_status below),
+    # a type neither rate-limit detector above ever matches, so this can't
+    # be accidentally reclassified as ProviderRateLimited.
     response = requests.post(
         OLLAMA_URL,
         json={
@@ -100,11 +153,21 @@ def _complete_anthropic(prompt: str, timeout: int, temperature: float, seed: int
             "before deploying with the real API (see README's Running it section)."
         )
     client = anthropic.Anthropic(api_key=api_key, timeout=timeout)
-    message = client.messages.create(
-        model=ANTHROPIC_MODEL,
-        max_tokens=1024,
-        temperature=temperature,
-        messages=[{"role": "user", "content": prompt}],
+
+    def _call():
+        return client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=1024,
+            temperature=temperature,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+    # anthropic's SDK (confirmed against the installed 1.5.0: see
+    # anthropic/_exceptions.py) raises a dedicated `anthropic.RateLimitError`
+    # (an APIStatusError subclass, status_code == 429) for exactly this
+    # condition — no status-code sniffing needed, unlike Gemini below.
+    message = _complete_with_rate_limit_retry(
+        _call, lambda exc: isinstance(exc, anthropic.RateLimitError)
     )
     return message.content[0].text
 
@@ -113,6 +176,7 @@ def _complete_gemini(prompt: str, timeout: int, temperature: float, seed: int | 
     # Imported lazily, same reasoning as the anthropic import above — only
     # needs to actually work when this provider is selected.
     from google import genai
+    from google.genai import errors as genai_errors
     from google.genai import types
 
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -125,10 +189,24 @@ def _complete_gemini(prompt: str, timeout: int, temperature: float, seed: int | 
     config_kwargs = {"temperature": temperature}
     if seed is not None:
         config_kwargs["seed"] = seed
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(**config_kwargs),
+
+    def _call():
+        return client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(**config_kwargs),
+        )
+
+    # google-genai (confirmed against the installed 2.23.0: see
+    # google/genai/errors.py) has no dedicated rate-limit exception class —
+    # ANY 4xx status raises the same `genai.errors.ClientError`, with the
+    # real HTTP status on `.code`. So unlike anthropic above, this must
+    # check `.code == 429` specifically rather than the exception TYPE alone
+    # — a bare `except ClientError` would also swallow a 400 bad-request or
+    # a 403 permission error as if they were a transient rate limit.
+    response = _complete_with_rate_limit_retry(
+        _call,
+        lambda exc: isinstance(exc, genai_errors.ClientError) and getattr(exc, "code", None) == 429,
     )
     return response.text
 

@@ -8,7 +8,18 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+import llm_client
 from generate import GENERATION_PROMPT_TEMPLATE, _condense_followup, _select_grounded_hits, answer_query_streaming
+
+# Referenced as `llm_client.ProviderRateLimited` (not `from llm_client import
+# ...`) throughout this file on purpose: generate.py/verification.py resolve
+# it dynamically off the `llm_client` module at each except-clause evaluation
+# (see their own comments) precisely so a module reload elsewhere in the test
+# session (test_llm_client.py's OLLAMA_NUM_CTX override test) can't leave
+# either side holding a stale class object that no longer `isinstance`-matches
+# the other's. A bare top-level `from llm_client import ProviderRateLimited`
+# here would bind a name once at collection time and reintroduce exactly that
+# mismatch on the raising side instead.
 
 
 def test_generation_prompt_instructs_copying_the_passages_own_spelling():
@@ -301,6 +312,108 @@ def test_coverage_not_called_on_verification_refusal():
          patch("generate.assess_coverage") as mock_coverage:
         events = list(answer_query_streaming("q"))
     mock_coverage.assert_not_called()
+
+
+# ───────── ProviderRateLimited — the third terminal state ─────────
+#
+# A rate-limit/quota failure must be a THIRD, distinct outcome from
+# "complete" and "refused" — never confused with Layer 1/2 deciding the
+# corpus doesn't support an answer (see llm_client.ProviderRateLimited's
+# docstring and generate.py's _provider_unavailable_event). Each test below
+# asserts the generator yields exactly one `provider_unavailable` event and
+# then stops — no `complete`, no `refused` afterward.
+
+
+def test_generation_rate_limit_yields_provider_unavailable_and_stops():
+    hits = [_hit("a", "patents_act_1970")]
+    with patch("generate.retrieve_vector", return_value=hits), \
+         patch("generate.retrieve_hybrid", return_value=hits), \
+         patch("generate._generate_draft_claims", side_effect=llm_client.ProviderRateLimited("quota exceeded")), \
+         patch("generate.verify_claim") as mock_verify, \
+         patch("generate.assess_coverage") as mock_coverage:
+        events = list(answer_query_streaming("q"))
+
+    assert events[-1] == {
+        "type": "provider_unavailable",
+        "message": "The AI service is temporarily busy — please try again in a moment.",
+    }
+    assert not any(e["type"] in ("complete", "refused") for e in events)
+    mock_verify.assert_not_called()
+    mock_coverage.assert_not_called()
+
+
+def test_verification_rate_limit_yields_provider_unavailable_and_stops():
+    hits = [_hit("a", "patents_act_1970")]
+    draft_claims = [{"text": "a claim", "source": 1}]
+    with patch("generate.retrieve_vector", return_value=hits), \
+         patch("generate.retrieve_hybrid", return_value=hits), \
+         patch("generate._generate_draft_claims", return_value=draft_claims), \
+         patch("generate.verify_claim", side_effect=llm_client.ProviderRateLimited("quota exceeded")), \
+         patch("generate.assess_coverage") as mock_coverage:
+        events = list(answer_query_streaming("q"))
+
+    assert events[-1] == {
+        "type": "provider_unavailable",
+        "message": "The AI service is temporarily busy — please try again in a moment.",
+    }
+    assert not any(e["type"] in ("complete", "refused") for e in events)
+    # Never reached coverage — the generator stopped at verification.
+    mock_coverage.assert_not_called()
+
+
+def test_verification_rate_limit_on_a_later_claim_still_stops_cleanly():
+    # First claim verifies fine, second hits the rate limit — must still
+    # stop immediately rather than finishing out the remaining claims.
+    hits = [_hit("a", "patents_act_1970"), _hit("b", "patents_act_1970")]
+    draft_claims = [{"text": "claim one", "source": 1}, {"text": "claim two", "source": 2}]
+    with patch("generate.retrieve_vector", return_value=hits), \
+         patch("generate.retrieve_hybrid", return_value=hits), \
+         patch("generate._generate_draft_claims", return_value=draft_claims), \
+         patch("generate.verify_claim", side_effect=[_verified_verdict(), llm_client.ProviderRateLimited("quota")]):
+        events = list(answer_query_streaming("q", coverage_check=False))
+
+    assert events[-1]["type"] == "provider_unavailable"
+    assert not any(e["type"] in ("complete", "refused") for e in events)
+    # Only one claim_result was ever emitted (for the first, successful claim).
+    assert sum(1 for e in events if e["type"] == "claim_result") == 1
+
+
+def test_condense_rate_limit_yields_provider_unavailable_and_stops():
+    history = [{"q": "earlier question", "a": "earlier answer"}]
+    with patch("generate._condense_followup", side_effect=llm_client.ProviderRateLimited("quota exceeded")), \
+         patch("generate.retrieve_vector") as mock_vec:
+        events = list(answer_query_streaming("a follow-up", history=history))
+
+    assert events[-1] == {
+        "type": "provider_unavailable",
+        "message": "The AI service is temporarily busy — please try again in a moment.",
+    }
+    assert not any(e["type"] in ("complete", "refused") for e in events)
+    # Must not proceed to retrieval on a rate-limited condense — that would
+    # waste a call doomed to hit the same limit downstream anyway.
+    mock_vec.assert_not_called()
+
+
+def test_coverage_rate_limit_fails_open_same_as_any_other_coverage_error():
+    # Coverage is advisory-only over an ALREADY-verified answer (see
+    # coverage.py's docstring) — a quota failure here must fail open exactly
+    # like today's broad `except Exception`, not surface provider_unavailable
+    # and discard an otherwise-good, already-complete answer.
+    hits = [_hit("a", "patents_act_1970")]
+    draft_claims = [{"text": "a claim", "source": 1}]
+    with patch("generate.retrieve_vector", return_value=hits), \
+         patch("generate.retrieve_hybrid", return_value=hits), \
+         patch("generate._generate_draft_claims", return_value=draft_claims), \
+         patch("generate.verify_claim", return_value=_verified_verdict()), \
+         patch("generate.assess_coverage", side_effect=llm_client.ProviderRateLimited("quota exceeded")):
+        events = list(answer_query_streaming("q"))
+
+    complete = next(e for e in events if e["type"] == "complete")
+    assert complete["result"]["coverage"] is None
+    assert "a claim" in complete["result"]["answer"]
+    assert not any(e["type"] == "provider_unavailable" for e in events)
+    coverage_done = next(e for e in events if e.get("stage") == "coverage" and e["status"] == "done")
+    assert coverage_done["meta"]["available"] is False
 
 
 def test_coverage_assessed_against_condensed_question_when_history_present():

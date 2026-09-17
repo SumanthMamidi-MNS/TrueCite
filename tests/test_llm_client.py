@@ -194,3 +194,153 @@ def test_gemini_receives_temperature_and_seed_via_config():
 
 def test_estimate_tokens_is_a_rough_char_based_estimate():
     assert llm_client.estimate_tokens("a" * 400) == 100
+
+
+# --- rate-limit / quota handling (ProviderRateLimited) ---------------------
+#
+# Detection confirmed directly against the installed SDKs (see
+# llm_client.py's inline comments at each call site):
+#   - anthropic 1.5.0: a dedicated `anthropic.RateLimitError`
+#     (APIStatusError subclass, status_code == 429) — checked by type alone.
+#   - google-genai 2.23.0: NO dedicated rate-limit class; any 4xx raises the
+#     same `google.genai.errors.ClientError`, so detection must additionally
+#     check `.code == 429` (a bare isinstance check would also catch 400/403).
+
+
+def _gemini_client_error(code: int, message: str = "boom"):
+    from google.genai import errors as genai_errors
+
+    return genai_errors.ClientError(code, {"message": message, "status": "x"})
+
+
+def _anthropic_rate_limit_error(message: str = "rate limited"):
+    import anthropic
+
+    mock_response = MagicMock()
+    mock_response.status_code = 429
+    mock_response.headers.get.return_value = None
+    mock_response.request = MagicMock()
+    return anthropic.RateLimitError(message, response=mock_response, body=None)
+
+
+def test_gemini_rate_limit_retries_then_raises_provider_rate_limited():
+    mock_client = MagicMock()
+    err = _gemini_client_error(429, "quota exceeded")
+    mock_client.models.generate_content.side_effect = [err, err, err]
+
+    with patch("llm_client.LLM_PROVIDER", "gemini"), \
+         patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}), \
+         patch("google.genai.Client", return_value=mock_client), \
+         patch("llm_client.time.sleep") as mock_sleep:
+        with pytest.raises(llm_client.ProviderRateLimited, match="quota exceeded"):
+            llm_client.complete("a prompt", timeout=10)
+
+    # 1 initial call + 2 retries = 3 total attempts, backing off 1s then 3s.
+    assert mock_client.models.generate_content.call_count == 3
+    assert [c.args[0] for c in mock_sleep.call_args_list] == [1, 3]
+
+
+def test_gemini_rate_limit_recovers_on_retry():
+    mock_client = MagicMock()
+    err = _gemini_client_error(429, "quota exceeded")
+    ok_response = MagicMock()
+    ok_response.text = "recovered"
+    mock_client.models.generate_content.side_effect = [err, ok_response]
+
+    with patch("llm_client.LLM_PROVIDER", "gemini"), \
+         patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}), \
+         patch("google.genai.Client", return_value=mock_client), \
+         patch("llm_client.time.sleep"):
+        result = llm_client.complete("a prompt", timeout=10)
+
+    assert result == "recovered"
+    assert mock_client.models.generate_content.call_count == 2
+
+
+def test_gemini_non_rate_limit_client_error_propagates_unretried():
+    # A 400/403/etc is a real ClientError too, but NOT a rate limit — must
+    # propagate as-is, not be retried and not be reclassified.
+    from google.genai import errors as genai_errors
+
+    mock_client = MagicMock()
+    mock_client.models.generate_content.side_effect = _gemini_client_error(400, "bad request")
+
+    with patch("llm_client.LLM_PROVIDER", "gemini"), \
+         patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}), \
+         patch("google.genai.Client", return_value=mock_client), \
+         patch("llm_client.time.sleep") as mock_sleep:
+        with pytest.raises(genai_errors.ClientError):
+            llm_client.complete("a prompt", timeout=10)
+
+    mock_client.models.generate_content.assert_called_once()
+    mock_sleep.assert_not_called()
+
+
+def test_anthropic_rate_limit_retries_then_raises_provider_rate_limited():
+    mock_client = MagicMock()
+    err = _anthropic_rate_limit_error("rate limited, slow down")
+    mock_client.messages.create.side_effect = [err, err, err]
+
+    with patch("llm_client.LLM_PROVIDER", "anthropic"), \
+         patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
+         patch("anthropic.Anthropic", return_value=mock_client), \
+         patch("llm_client.time.sleep") as mock_sleep:
+        with pytest.raises(llm_client.ProviderRateLimited, match="rate limited"):
+            llm_client.complete("a prompt", timeout=10)
+
+    assert mock_client.messages.create.call_count == 3
+    assert [c.args[0] for c in mock_sleep.call_args_list] == [1, 3]
+
+
+def test_anthropic_rate_limit_recovers_on_retry():
+    mock_client = MagicMock()
+    err = _anthropic_rate_limit_error()
+    ok_message = MagicMock()
+    ok_message.content = [MagicMock(text="recovered")]
+    mock_client.messages.create.side_effect = [err, ok_message]
+
+    with patch("llm_client.LLM_PROVIDER", "anthropic"), \
+         patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
+         patch("anthropic.Anthropic", return_value=mock_client), \
+         patch("llm_client.time.sleep"):
+        result = llm_client.complete("a prompt", timeout=10)
+
+    assert result == "recovered"
+    assert mock_client.messages.create.call_count == 2
+
+
+def test_anthropic_non_rate_limit_error_propagates_unretried():
+    import anthropic
+
+    mock_response = MagicMock()
+    mock_response.status_code = 400
+    mock_response.headers.get.return_value = None
+    mock_response.request = MagicMock()
+    bad_request_err = anthropic.BadRequestError("bad request", response=mock_response, body=None)
+
+    mock_client = MagicMock()
+    mock_client.messages.create.side_effect = bad_request_err
+
+    with patch("llm_client.LLM_PROVIDER", "anthropic"), \
+         patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}), \
+         patch("anthropic.Anthropic", return_value=mock_client), \
+         patch("llm_client.time.sleep") as mock_sleep:
+        with pytest.raises(anthropic.BadRequestError):
+            llm_client.complete("a prompt", timeout=10)
+
+    mock_client.messages.create.assert_called_once()
+    mock_sleep.assert_not_called()
+
+
+def test_ollama_error_never_raises_provider_rate_limited():
+    # Ollama has no rate-limit concept — any failure (e.g. a 500 from
+    # raise_for_status) must propagate as its normal requests exception,
+    # never be reclassified as ProviderRateLimited.
+    import requests as requests_lib
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status.side_effect = requests_lib.exceptions.HTTPError("server error")
+
+    with patch("llm_client.requests.post", return_value=mock_response):
+        with pytest.raises(requests_lib.exceptions.HTTPError):
+            llm_client.complete("a prompt", timeout=10)

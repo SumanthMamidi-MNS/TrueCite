@@ -216,6 +216,7 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 }
 .verify-summary:hover { background: rgba(86,217,163,.2); transform: translateY(-1px); }
 .verify-summary.warn { border-color: rgba(240,179,78,.3); background: var(--amber-dim); color: var(--amber); }
+.verify-summary.busy { border-color: rgba(127,168,240,.3); background: rgba(127,168,240,.1); color: var(--blue); }
 .verify-summary .caret { transition: transform .25s var(--ease); opacity: .7; }
 .verify:not(.collapsed) .verify-summary .caret { transform: rotate(90deg); }
 
@@ -312,6 +313,20 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 .refusal h4 { font-family: var(--font-display); font-size: 1.02rem; margin-bottom: .3rem; font-weight: 600; }
 .refusal p { color: var(--text-dim); font-size: .9rem; }
 .refusal .why { margin-top: .55rem; font-family: var(--font-mono); font-size: .72rem; color: var(--amber); opacity: .92; }
+
+/* provider unavailable — infra hiccup (rate limit / quota), NOT a grounding
+   refusal. Blue, not the refusal's amber, so it can never be mistaken for
+   "not enough grounded information" at a glance. */
+.provider-unavailable {
+  display: grid; grid-template-columns: auto minmax(0,1fr); gap: .9rem;
+  padding: 1rem 1.1rem; margin-top: .9rem;
+  background: rgba(127,168,240,.08); border: 1px solid rgba(127,168,240,.28); border-radius: var(--radius);
+  animation: riseIn .45s var(--ease) both;
+}
+.provider-unavailable-icon { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: rgba(127,168,240,.14); border: 1px solid rgba(127,168,240,.28); }
+.provider-unavailable-icon svg { width: 16px; height: 16px; stroke: var(--blue); stroke-width: 1.8; stroke-linecap: round; }
+.provider-unavailable h4 { font-family: var(--font-display); font-size: 1.02rem; margin-bottom: .3rem; font-weight: 600; color: var(--blue); }
+.provider-unavailable p { color: var(--text-dim); font-size: .9rem; }
 
 /* accordions (sources / discarded) */
 .acc { margin-top: .85rem; }

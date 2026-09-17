@@ -517,6 +517,27 @@ function ask(question) {
       toBottom();
     }
 
+    // A third, distinct terminal state — NOT the grounding refusal above,
+    // and NOT a raw pipeline error below: the LLM provider itself (Gemini's
+    // free tier in production) reported a rate-limit/quota condition, so
+    // nothing was fabricated and nothing about the corpus was judged. Own
+    // markup/color (blue, not the refusal's amber) on purpose, so it never
+    // reads as "not enough grounded information".
+    if (ev.type === "provider_unavailable") {
+      clearInterval(timer);
+      const sumBtn = $(".verify-summary", verify);
+      sumBtn.hidden = false;
+      sumBtn.classList.add("busy");
+      $(".vs-text", sumBtn).textContent = `Service busy · ${((performance.now() - t0) / 1000).toFixed(1)}s`;
+      body.insertAdjacentHTML("beforeend", `
+        <div class="provider-unavailable">
+          <div class="provider-unavailable-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 7v5l3.3 2"/><circle cx="12" cy="12" r="9"/></svg></div>
+          <div><h4>Temporarily unavailable</h4><p>${esc(ev.message)}</p></div>
+        </div>`);
+      finish();
+      toBottom();
+    }
+
     if (ev.type === "error") {
       clearInterval(timer);
       body.insertAdjacentHTML("beforeend", `

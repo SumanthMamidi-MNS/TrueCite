@@ -56,6 +56,22 @@ REFUSAL_MESSAGE = (
     "confidently. Please rephrase, or consult a qualified IP professional."
 )
 
+# A THIRD, distinct terminal state alongside "complete" and "refused" — see
+# ProviderRateLimited's docstring in llm_client.py. This must never be
+# spelled like REFUSAL_MESSAGE above: that message is specifically about the
+# corpus not grounding an answer (Layer 1/2's job), while this one is about
+# the LLM infrastructure itself being temporarily unreachable — an entirely
+# different thing the user needs to know, and act on differently (retry
+# shortly, vs. rephrase or consult a professional).
+PROVIDER_UNAVAILABLE_MESSAGE = (
+    "The AI service is temporarily busy — please try again in a moment."
+)
+
+
+def _provider_unavailable_event() -> dict:
+    return {"type": "provider_unavailable", "message": PROVIDER_UNAVAILABLE_MESSAGE}
+
+
 GENERATION_PROMPT_TEMPLATE = """You are an assistant answering a question about Indian Ayurveda IP/regulatory law, using ONLY the source passages given below. Do not use outside knowledge. Every factual claim you make must be directly supported by one of these passages. Use the passage's own spelling and wording for every name, technical term, section number, figure, and date — copy them exactly as they appear in the passage, even if a different spelling is more common. When your claim states or implies a specific section, sub-section, or clause number as the legal basis for a fact, that number must be the one that actually appears in the passage you are citing for that claim — never a number recalled from general knowledge or a different passage, even if it seems more specific or correct.
 
 For each claim, first find the passage that is MOST SPECIFICALLY and DIRECTLY on point for the question — a passage that discusses the exact topic asked about beats a passage that is merely more general or from a higher-authority document but doesn't address the specific point. Only when two or more passages are EQUALLY specific and directly on point should you prefer the one earlier in the list below (they are pre-sorted by authority for exactly that tie-breaking case, not as a general preference).
@@ -270,6 +286,16 @@ def answer_query_streaming(
         yield {"type": "stage", "stage": "condense", "status": "start"}
         try:
             effective_query = _condense_followup(query, history[-MAX_HISTORY_TURNS:])
+        except llm_client.ProviderRateLimited:
+            # Deliberately NOT folded into the fail-open Exception handler
+            # below. Falling back to the raw query here would just delay the
+            # same failure to the generation call a few lines down (still
+            # the same rate-limited provider) at the cost of a wasted
+            # retrieval pass and more retry latency already spent above —
+            # stopping now, with an honest "infrastructure busy" event, is
+            # both faster and doesn't dress up an outage as anything else.
+            yield _provider_unavailable_event()
+            return
         except Exception:
             # Broad on purpose: this must fail open to the original query
             # regardless of which provider llm_client is configured for
@@ -347,7 +373,11 @@ def answer_query_streaming(
     yield {"type": "sources", "sources": sources}
 
     yield {"type": "stage", "stage": "generation", "status": "start"}
-    draft_claims = _generate_draft_claims(effective_query, hits)
+    try:
+        draft_claims = _generate_draft_claims(effective_query, hits)
+    except llm_client.ProviderRateLimited:
+        yield _provider_unavailable_event()
+        return
     yield {
         "type": "stage",
         "stage": "generation",
@@ -379,6 +409,15 @@ def answer_query_streaming(
 
         try:
             verdict = verify_claim(claim["text"], chunk["text"])
+        except llm_client.ProviderRateLimited:
+            # Same reasoning as the generation/condense call sites: a
+            # rate-limited provider must surface as "infrastructure busy",
+            # never as a per-claim "verification unavailable" that quietly
+            # accumulates into a Layer 2 grounding refusal once every claim
+            # has been dropped this way (see verification.py's re-raise of
+            # this exact exception, for exactly this reason).
+            yield _provider_unavailable_event()
+            return
         except Exception as exc:
             # fail closed: an unverifiable claim is dropped, not kept.
             # Broad on purpose, same reasoning as the condense fallback
@@ -463,6 +502,16 @@ def answer_query_streaming(
             # Fail open — see coverage.py's docstring: no verdict, never a
             # negative one guessed from a failure, and the answer already
             # assembled above renders exactly as if this stage didn't run.
+            # Deliberately NOT special-cased for ProviderRateLimited (unlike
+            # condense/generation/verification above): coverage is
+            # advisory-only on an ALREADY-verified, already-complete answer
+            # (see coverage.py's docstring — it never modifies answer/claims/
+            # citations and this project's own Phase 6 numbers are why it's
+            # non-blocking). A quota failure here has nothing left to sink —
+            # there's a good answer either way — so it falls into this
+            # existing broad `except Exception`, same as any other coverage
+            # failure, rather than discarding a successful answer to report
+            # an infrastructure hiccup on a stage that was never load-bearing.
             result["coverage"] = None
             yield {"type": "stage", "stage": "coverage", "status": "done", "meta": {"available": False}}
 

@@ -195,3 +195,39 @@ def test_a_failing_vote_is_skipped_not_counted():
     assert mock_post.call_count == 3
     assert result["supported"] is True
     assert result["votes"] == [True, True]
+
+
+# --- ProviderRateLimited must propagate, never be swallowed per-vote -------
+#
+# Contrast with test_raises_when_every_vote_fails/test_a_failing_vote_is_
+# skipped_not_counted above: an ordinary parse failure on a vote is
+# tolerated (skipped, or falls back to "all votes failed" -> ValueError,
+# fail-closed). A rate-limited provider must NOT go through that same broad
+# tolerance — if it did, every vote would fail silently, verify_claim would
+# raise a generic ValueError, and generate.py's caller would drop the claim
+# as ordinary "verification unavailable", eventually producing the Layer 2
+# grounding refusal once every claim was dropped that way. That's exactly
+# the infra-vs-grounding confusion ProviderRateLimited exists to prevent, so
+# it must propagate out of verify_claim immediately, not be retried per-vote
+# or absorbed into the "all votes failed" path.
+
+
+def test_provider_rate_limited_propagates_and_stops_voting_immediately():
+    from llm_client import ProviderRateLimited
+
+    with patch(
+        "verification._verify_claim_once",
+        side_effect=[{"reasoning": "ok", "supported": True}, ProviderRateLimited("quota exceeded")],
+    ) as mock_once:
+        with pytest.raises(ProviderRateLimited):
+            verify_claim("some claim", "some passage", votes=3)
+    # Stopped after the 2nd vote raised — the 3rd vote was never attempted.
+    assert mock_once.call_count == 2
+
+
+def test_provider_rate_limited_is_not_downgraded_to_all_votes_failed():
+    from llm_client import ProviderRateLimited
+
+    with patch("verification._verify_claim_once", side_effect=ProviderRateLimited("quota exceeded")):
+        with pytest.raises(ProviderRateLimited):
+            verify_claim("some claim", "some passage", votes=3)
