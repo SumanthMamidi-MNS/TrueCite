@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>poster</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+
+  :root{
+    --paper:#F0EEE6; --panel:#FFFFFF; --ink:#1C2530; --ink-soft:#525C63; --ink-faint:#7C868C;
+    --line:#D7D2C2; --line-strong:#B9B29A;
+    --indigo:#2F4B7C; --indigo-soft:#E6EBF4; --indigo-line:#AEC0DE;
+    --brass:#8F6C2A; --brass-soft:#F2E9D2; --brass-line:#D9C593;
+    --sage:#2E6E58; --sage-soft:#DFEEE6; --sage-line:#9FCBB3;
+    --rust:#9C4A32; --rust-soft:#F3E1D8; --rust-line:#E0AC93;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    width:1800px; background:var(--paper); color:var(--ink);
+    font-family:'IBM Plex Sans',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .sheet{ padding:64px 72px 56px; }
+
+  /* header */
+  header{ text-align:center; padding-bottom:34px; border-bottom:2.5px solid var(--ink); margin-bottom:40px; }
+  .eyebrow{ font-family:'IBM Plex Mono',monospace; font-size:16px; letter-spacing:.16em; text-transform:uppercase; color:var(--indigo); margin:0 0 14px; font-weight:600; }
+  h1{ font-family:'Spectral',Georgia,serif; font-weight:800; font-size:64px; letter-spacing:-.01em; margin:0 0 10px; color:var(--ink); }
+  .dek{ font-family:'Spectral',Georgia,serif; font-style:italic; font-weight:500; font-size:24px; color:var(--ink-soft); margin:0; }
+
+  h2.sec{ font-family:'IBM Plex Mono',monospace; font-size:16px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); font-weight:600; margin:0 0 20px; display:flex; align-items:center; gap:14px; }
+  h2.sec::after{ content:""; flex:1; height:1px; background:var(--line-strong); }
+
+  section{ margin-bottom:46px; }
+
+  /* problem callout */
+  .problem{ display:grid; grid-template-columns:1.1fr 1fr; gap:36px; align-items:stretch; }
+  .problem .p1, .problem .p2{ background:var(--panel); border:1.5px solid var(--line); border-radius:14px; padding:26px 30px; }
+  .problem p{ font-size:17.5px; line-height:1.62; color:var(--ink-soft); margin:0; }
+  .problem .p1 p b{ color:var(--ink); }
+  .problem .p2{ background:var(--indigo-soft); border-color:var(--indigo-line); }
+  .problem .p2 .k{ font-family:'IBM Plex Mono',monospace; font-size:12.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--indigo); font-weight:700; margin-bottom:10px; display:block; }
+  .problem .p2 p{ font-family:'Spectral',Georgia,serif; font-style:italic; font-size:19px; line-height:1.55; color:var(--ink); }
+
+  /* corpus grid */
+  .corpus{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+  .doc{ background:var(--panel); border:1.5px solid var(--line); border-radius:11px; padding:16px 18px; }
+  .doc .tier{ display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:2px 8px; border-radius:5px; margin-bottom:9px; }
+  .doc .tier.act{ background:var(--rust-soft); color:var(--rust); border:1px solid var(--rust-line); }
+  .doc .tier.guide{ background:var(--brass-soft); color:var(--brass); border:1px solid var(--brass-line); }
+  .doc .tier.info{ background:var(--indigo-soft); color:var(--indigo); border:1px solid var(--indigo-line); }
+  .doc .name{ font-weight:600; font-size:14.5px; line-height:1.35; color:var(--ink); margin-bottom:4px; }
+  .doc .yr{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-faint); }
+
+  /* pipeline */
+  .flow{ display:flex; flex-direction:column; align-items:flex-start; gap:0; margin-left:60px; }
+  .fnode{ width:900px; background:var(--panel); border:2px solid var(--ink); border-radius:12px; padding:18px 28px; text-align:center; position:relative; z-index:2; }
+  .fnode.soft{ border-color:var(--line-strong); border-width:1.5px; }
+  .fnode .t{ font-weight:700; font-size:19px; color:var(--ink); margin-bottom:4px; }
+  .fnode .s{ font-size:14.5px; color:var(--ink-soft); line-height:1.4; }
+  .fnode.indigo{ background:var(--indigo-soft); border-color:var(--indigo-line); }
+  .fnode.indigo .t{ color:var(--indigo); }
+  .fnode.brass{ background:var(--brass-soft); border-color:var(--brass-line); }
+  .fnode.brass .t{ color:var(--brass); }
+  .fnode.sage-outline{ background:var(--panel); border-color:var(--sage-line); border-style:dashed; }
+  .fnode.sage-outline .t{ color:var(--sage); }
+  .fnode.final{ background:var(--ink); border-color:var(--ink); }
+  .fnode.final .t{ color:#fff; font-size:20px; }
+  .fnode.final .s{ color:#CBD3D8; }
+
+  .connector{ width:2px; height:30px; background:var(--ink-faint); position:relative; z-index:1; }
+  .connector::after{ content:""; position:absolute; bottom:-1px; left:50%; transform:translateX(-50%); width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent; border-top:9px solid var(--ink-faint); }
+
+  .branch-row{ width:900px; display:flex; justify-content:flex-end; position:relative; height:0; }
+  .branch{ position:absolute; top:-8px; left:900px; display:flex; align-items:center; gap:0; }
+  .branch .bline{ width:70px; height:2px; background:var(--rust); position:relative; }
+  .branch .bline::after{ content:""; position:absolute; right:-1px; top:50%; transform:translateY(-50%); width:0; height:0; border-top:6px solid transparent; border-bottom:6px solid transparent; border-left:9px solid var(--rust); }
+  .branch .blabel{ font-family:'IBM Plex Mono',monospace; font-size:12.5px; font-weight:700; color:var(--rust); background:var(--paper); padding:0 8px; position:absolute; top:-22px; left:14px; }
+  .exit{ position:absolute; top:-64px; left:986px; width:330px; background:var(--rust-soft); border:1.5px solid var(--rust-line); border-radius:11px; padding:15px 20px; }
+  .exit .t{ font-weight:700; font-size:16px; color:var(--rust); margin-bottom:5px; }
+  .exit .s{ font-size:13px; color:var(--ink-soft); line-height:1.4; }
+
+  .vote-row{ display:flex; gap:14px; justify-content:center; margin:12px 0 8px; }
+  .vote{ width:52px; height:52px; border-radius:50%; background:var(--sage-soft); border:2px solid var(--sage-line); display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:14px; color:var(--sage); }
+
+  /* stack strip */
+  .stack{ display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
+  .chip{ background:var(--panel); border:1.5px solid var(--line); border-radius:12px; padding:20px 22px; }
+  .chip .t{ font-weight:700; font-size:16.5px; color:var(--ink); margin-bottom:8px; }
+  .chip .s{ font-size:13.5px; color:var(--ink-soft); line-height:1.5; }
+
+  /* results */
+  .results{ background:var(--panel); border:2px solid var(--ink); border-radius:16px; padding:30px 36px; }
+  .results-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:11px; overflow:hidden; margin-bottom:20px; }
+  .rstat{ background:var(--panel); padding:22px 18px; text-align:center; }
+  .rstat .n{ font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; font-weight:700; font-size:40px; color:var(--sage); line-height:1; }
+  .rstat .n small{ font-size:20px; color:var(--ink-soft); font-weight:500; }
+  .rstat .l{ font-size:13px; color:var(--ink-soft); margin-top:9px; line-height:1.4; }
+  .rtable{ width:100%; border-collapse:collapse; font-size:14.5px; }
+  .rtable th{ text-align:left; font-family:'IBM Plex Mono',monospace; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-faint); font-weight:600; padding:8px 14px; border-bottom:2px solid var(--line-strong); }
+  .rtable td{ padding:10px 14px; border-bottom:1px solid var(--line); color:var(--ink-soft); }
+  .rtable td b{ color:var(--ink); font-variant-numeric:tabular-nums; font-family:'IBM Plex Mono',monospace; }
+  .rtable tr:last-child td{ border-bottom:none; }
+  .sweet{ margin-top:16px; text-align:center; background:var(--sage-soft); border:1px solid var(--sage-line); border-radius:9px; padding:12px; font-weight:700; color:var(--sage); font-size:15px; }
+
+  /* legend */
+  .legend{ display:flex; justify-content:center; gap:40px; padding:22px 0; border-top:1.5px solid var(--line-strong); border-bottom:1.5px solid var(--line-strong); }
+  .legend .item{ display:flex; align-items:center; gap:10px; font-size:14.5px; color:var(--ink-soft); }
+  .sw{ width:17px; height:17px; border-radius:5px; flex:none; }
+
+  footer{ text-align:center; padding-top:26px; }
+  footer p{ font-size:13.5px; color:var(--ink-faint); margin:4px 0; }
+  footer p b{ color:var(--ink-soft); }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header>
+    <p class="eyebrow">SIH26045 &middot; Ministry of Ayush &middot; Software</p>
+    <h1>IP&#8209;SAKTI SAHAYAK</h1>
+    <p class="dek">A citation&#8209;verified assistant for Ayurveda IP &amp; regulatory law &mdash; built to refuse rather than guess</p>
+  </header>
+
+  <section class="problem">
+    <div class="p1">
+      <p>Ayurveda IP guidance is scattered across the <b>Patents Act 1970</b>, IPO guidelines, the <b>Biological Diversity Act</b>, and WIPO/TKDL material. A wrong answer here has real consequences &mdash; a missed filing deadline, a misread disclosure rule. <b>Retrieving the right document isn't the hard part &mdash; trusting what it says is.</b></p>
+    </div>
+    <div class="p2">
+      <span class="k">The failure mode this targets</span>
+      <p>A 2025 Stanford study found production legal&#8209;AI tools &mdash; Westlaw, LexisNexis included &mdash; routinely cite a real source for a claim that source doesn't actually support.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="sec">Corpus &mdash; 7 sources, provenance &amp; authority tracked</h2>
+    <div class="corpus">
+      <div class="doc"><span class="tier act">Act</span><div class="name">Patents Act, 1970</div><div class="yr">amendments through 2024</div></div>
+      <div class="doc"><span class="tier act">Act</span><div class="name">Biological Diversity Act, 2002</div><div class="yr">assented 2003</div></div>
+      <div class="doc"><span class="tier guide">Guideline</span><div class="name">IPO TK &amp; Biological Material Guidelines</div><div class="yr">2012</div></div>
+      <div class="doc"><span class="tier guide">Guideline</span><div class="name">IPO AYUSH Examination Guidelines</div><div class="yr">2025</div></div>
+      <div class="doc"><span class="tier info">Informational</span><div class="name">WIPO TK Documentation Toolkit</div><div class="yr">public TKDL substitute</div></div>
+      <div class="doc"><span class="tier info">Informational</span><div class="name">WIPO GRATK Treaty</div><div class="yr">adopted 2024, not yet in force</div></div>
+      <div class="doc"><span class="tier info">Informational</span><div class="name">PIB Press Release</div><div class="yr">2013</div></div>
+      <div class="doc" style="display:flex;align-items:center;justify-content:center;background:var(--paper);border-style:dashed;">
+        <div style="text-align:center"><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-faint);line-height:1.5">2 candidates<br>sourced &amp; <b style="color:var(--rust)">rejected</b><br>on quality grounds</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="sec">The pipeline &mdash; nine fixed stages, always this order</h2>
+    <div class="flow">
+
+      <div class="fnode soft"><div class="t">The user's question</div></div>
+      <div class="connector"></div>
+
+      <div class="fnode indigo">
+        <div class="t">Hybrid retrieval</div>
+        <div class="s">vector search (bge&#8209;m3) + BM25 keyword, fused by Reciprocal Rank Fusion &mdash; top 40 candidates</div>
+      </div>
+      <div class="connector"></div>
+
+      <div style="position:relative;width:900px;">
+        <div class="fnode" style="border-width:2.5px;">
+          <div class="t">Layer 1 &mdash; confidence gate</div>
+          <div class="s">best match distance &le; 0.90 (calibrated against real query evidence)?</div>
+        </div>
+        <div class="branch">
+          <span class="blabel">no</span><div class="bline"></div>
+        </div>
+        <div class="exit">
+          <div class="t">Refused</div>
+          <div class="s">&ldquo;not enough grounded information&rdquo; &mdash; zero LLM calls spent</div>
+        </div>
+      </div>
+      <div class="connector"></div>
+
+      <div class="fnode brass">
+        <div class="t">Authority ordering</div>
+        <div class="s">Act &gt; Guideline &gt; Informational, then recency</div>
+      </div>
+      <div class="connector"></div>
+
+      <div class="fnode indigo">
+        <div class="t">Generation</div>
+        <div class="s">drafts discrete claims &mdash; each tied to exactly one passage, never free prose</div>
+      </div>
+      <div class="connector"></div>
+
+      <div style="position:relative;width:900px;">
+        <div class="fnode" style="border-width:2.5px;padding-bottom:14px;">
+          <div class="t">Layer 2 &mdash; claim verification</div>
+          <div class="s">does the cited passage actually support this claim?</div>
+          <div class="vote-row">
+            <div class="vote">v1</div><div class="vote">v2</div><div class="vote">v3</div>
+          </div>
+          <div class="s" style="font-size:13px">3 independent votes, distinct seeds &mdash; 2&#8209;of&#8209;3 majority required</div>
+        </div>
+        <div class="branch">
+          <span class="blabel">no</span><div class="bline"></div>
+        </div>
+        <div class="exit">
+          <div class="t">Discarded</div>
+          <div class="s">claim dropped, listed under &ldquo;what this left out&rdquo; &mdash; never shown</div>
+        </div>
+      </div>
+      <div class="connector"></div>
+
+      <div class="fnode brass">
+        <div class="t">Citation formatted</div>
+        <div class="s" style="font-family:'IBM Plex Mono',monospace">[Source &middot; &sect;section &middot; effective date]</div>
+      </div>
+      <div class="connector"></div>
+
+      <div class="fnode sage-outline">
+        <div class="t">Coverage check &mdash; advisory only</div>
+        <div class="s">does the answer address what was asked? can add a note &mdash; can <b>never</b> cause a refusal</div>
+      </div>
+      <div class="connector"></div>
+
+      <div class="fnode final">
+        <div class="t">Answer shown &mdash; only the upheld claims, each cited</div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2 class="sec">Tech stack, and why</h2>
+    <div class="stack">
+      <div class="chip"><div class="t">Hybrid retrieval</div><div class="s">Vector search catches paraphrase; BM25 catches exact statutory terms a paraphrase misses. RRF fuses by rank, not score &mdash; nothing to miscalibrate.</div></div>
+      <div class="chip"><div class="t">Structural chunking</div><div class="s">Follows each document's own numbered sections and lettered clauses &mdash; a fixed&#8209;token window would cut a legal clause in half.</div></div>
+      <div class="chip"><div class="t">Local model, API one env&#8209;var away</div><div class="s">Development needed hundreds of calls; a metered key would exhaust before deployment. One seam switches provider, proven identical both ways.</div></div>
+      <div class="chip"><div class="t">Fixed sequence, not multi&#8209;agent</div><div class="s">No planner decides what runs next. Same sequence every time &mdash; auditable, and a judge can trace exactly what happened.</div></div>
+    </div>
+  </section>
+
+  <section style="margin-bottom:0;">
+    <h2 class="sec">Results &mdash; worst case across 3 seeded runs, not one run's number</h2>
+    <div class="results">
+      <div class="results-grid">
+        <div class="rstat"><div class="n">0<small>/5</small></div><div class="l">false answers &mdash; every measured run</div></div>
+        <div class="rstat"><div class="n">5<small>/5</small></div><div class="l">unanswerable questions correctly refused, every run</div></div>
+        <div class="rstat"><div class="n">96</div><div class="l">question&#8209;runs &mdash; 3 question sets &times; 3 seeded runs</div></div>
+        <div class="rstat"><div class="n">2</div><div class="l">held&#8209;out sets, frozen into git before ever being run</div></div>
+      </div>
+      <table class="rtable">
+        <tr><th>Question set</th><th>Citation accuracy</th><th>False refusals</th><th>Correct refusals</th><th>False answers</th></tr>
+        <tr><td>Dev set (tuned against)</td><td><b>8&ndash;9 / 11</b></td><td><b>1&ndash;2 / 11</b></td><td><b>5/5</b></td><td><b>0/5</b></td></tr>
+        <tr><td>Held&#8209;out v1 (frozen first)</td><td><b>5&ndash;6 / 10</b></td><td><b>3&ndash;4 / 10</b></td><td><b>5/5</b></td><td><b>0/5</b></td></tr>
+        <tr><td>Held&#8209;out v2 (frozen after v1)</td><td><b>6 / 10</b></td><td><b>4 / 10</b></td><td><b>5/5</b></td><td><b>0/5</b></td></tr>
+      </table>
+      <div class="sweet">The honest weak spot is over&#8209;refusal, not hallucination &mdash; the correct side to err on for legal guidance</div>
+    </div>
+  </section>
+
+  <div class="legend">
+    <div class="item"><span class="sw" style="background:var(--indigo)"></span>retrieval &amp; generation</div>
+    <div class="item"><span class="sw" style="background:var(--brass)"></span>authority &amp; citation</div>
+    <div class="item"><span class="sw" style="background:var(--sage)"></span>verified / non&#8209;blocking</div>
+    <div class="item"><span class="sw" style="background:var(--rust)"></span>refused / discarded &mdash; a controlled stop</div>
+  </div>
+
+  <footer>
+    <p><b>Nine fixed stages, always in this order &mdash; no planner, nothing decides its own next action.</b></p>
+    <p>Six real bugs found by testing, fixed, and measured &mdash; including a silent prompt&#8209;truncation bug and an unretrievable statutory clause &mdash; before two question sets frozen into git proved the fixes generalize.</p>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -3,6 +3,8 @@
 A multilingual, source-cited RAG assistant for Ayurveda intellectual property and
 regulatory guidance, built for SIH26045 (Ministry of Ayush).
 
+![IP-SAKTI Sahayak — the full pipeline, corpus, tech stack, and measured results in one poster](docs/assets/pipeline-poster.png)
+
 ## The problem this solves
 
 Ayurveda researchers, practitioners, and companies need reliable answers about IP
