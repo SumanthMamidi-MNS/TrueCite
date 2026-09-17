@@ -52,6 +52,7 @@
   .doc .tier.info{ background:var(--indigo-soft); color:var(--indigo); border:1px solid var(--indigo-line); }
   .doc .name{ font-weight:600; font-size:14.5px; line-height:1.35; color:var(--ink); margin-bottom:4px; }
   .doc .yr{ font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-faint); }
+  .doc .src{ font-size:11px; color:var(--ink-faint); margin-top:2px; }
 
   /* pipeline — every node is the same recipe: title + at most one
      description line, same padding, same width. Uniform on purpose. */
@@ -93,6 +94,27 @@
   .exit{ width:300px; background:var(--rust-soft); border:1.5px solid var(--rust-line); border-radius:11px; padding:13px 18px; text-align:left; }
   .exit .t{ font-weight:700; font-size:15px; color:var(--rust); margin-bottom:4px; }
   .exit .s{ font-size:12px; color:var(--ink-soft); line-height:1.4; }
+
+  /* non-rejection side-note (the optional condense step) — same proven
+     branch-group geometry, indigo instead of rust, no "no"/"yes" label
+     since nothing here is a pass/fail decision. */
+  .branch-group.info .blabel{ color:var(--indigo); }
+  .branch-group.info .bline{ background:var(--indigo-line); }
+  .branch-group.info .bline::after{ border-left-color:var(--indigo-line); }
+  .exit.info{ background:var(--indigo-soft); border-color:var(--indigo-line); }
+  .exit.info .t{ color:var(--indigo); }
+
+  /* side-by-side sub-boxes (vector + BM25) that merge into one node below —
+     each is its own column with its own centered connector beneath it, so
+     the arrow under each box is guaranteed centered under THAT box, not
+     positioned by hand-measured gap arithmetic. Total width still 720px,
+     matching every other row so the column reads as one consistent flow. */
+  .split-row{ display:flex; gap:20px; width:720px; }
+  .split-col{ display:flex; flex-direction:column; align-items:center; width:350px; }
+  .fnode-half{ width:350px; background:var(--indigo-soft); border:1.5px solid var(--indigo-line);
+               border-radius:11px; padding:12px 18px; text-align:center; display:flex; flex-direction:column; justify-content:center; min-height:48px; }
+  .fnode-half .t{ font-weight:700; font-size:15px; color:var(--indigo); line-height:1.25; }
+  .fnode-half .s{ font-size:12px; color:var(--ink-soft); line-height:1.35; margin-top:3px; }
 
   /* stack strip */
   .stack{ display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
@@ -146,42 +168,64 @@
   <section>
     <h2 class="sec">Corpus &mdash; 7 sources, provenance &amp; authority tracked</h2>
     <div class="corpus">
-      <div class="doc"><span class="tier act">Act</span><div class="name">Patents Act, 1970</div><div class="yr">amendments through 2024</div></div>
-      <div class="doc"><span class="tier act">Act</span><div class="name">Biological Diversity Act, 2002</div><div class="yr">assented 2003</div></div>
-      <div class="doc"><span class="tier guide">Guideline</span><div class="name">IPO TK &amp; Biological Material Guidelines</div><div class="yr">2012</div></div>
-      <div class="doc"><span class="tier guide">Guideline</span><div class="name">IPO AYUSH Examination Guidelines</div><div class="yr">2025</div></div>
-      <div class="doc"><span class="tier info">Informational</span><div class="name">WIPO TK Documentation Toolkit</div><div class="yr">public TKDL substitute</div></div>
-      <div class="doc"><span class="tier info">Informational</span><div class="name">WIPO GRATK Treaty</div><div class="yr">adopted 2024, not yet in force</div></div>
-      <div class="doc"><span class="tier info">Informational</span><div class="name">PIB Press Release</div><div class="yr">2013</div></div>
-      <div class="doc" style="display:flex;align-items:center;justify-content:center;background:var(--paper);border-style:dashed;">
-        <div style="text-align:center"><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-faint);line-height:1.5">2 candidates<br>sourced &amp; <b style="color:var(--rust)">rejected</b><br>on quality grounds</div></div>
+      <div class="doc"><span class="tier act">Act</span><div class="name">Patents Act, 1970</div><div class="yr">amendments through 2024</div><div class="src">via IP India</div></div>
+      <div class="doc"><span class="tier act">Act</span><div class="name">Biological Diversity Act, 2002</div><div class="yr">assented 2003</div><div class="src">via HP State Biodiversity Board&#8202;&mdash;&#8202;central gov links dead at sourcing time</div></div>
+      <div class="doc"><span class="tier guide">Guideline</span><div class="name">IPO TK &amp; Biological Material Guidelines</div><div class="yr">2012</div><div class="src">via IP India</div></div>
+      <div class="doc"><span class="tier guide">Guideline</span><div class="name">IPO AYUSH Examination Guidelines</div><div class="yr">2025</div><div class="src">via IP India</div></div>
+      <div class="doc"><span class="tier info">Informational</span><div class="name">WIPO TK Documentation Toolkit</div><div class="yr">public TKDL substitute</div><div class="src">via WIPO &mdash; TKDL itself is NDA&#8209;restricted to patent offices</div></div>
+      <div class="doc"><span class="tier info">Informational</span><div class="name">WIPO GRATK Treaty</div><div class="yr">adopted 2024, not yet in force</div><div class="src">via WIPO &mdash; needs 15 ratifications</div></div>
+      <div class="doc"><span class="tier info">Informational</span><div class="name">PIB Press Release</div><div class="yr">2013</div><div class="src">via Ministry of Commerce &amp; Industry</div></div>
+      <div class="doc" style="background:var(--paper);border-style:dashed;">
+        <span class="tier" style="background:var(--rust-soft);color:var(--rust);border:1px solid var(--rust-line);">Rejected</span>
+        <div class="name">Patents Rules 2003 &amp; 2024 Amendment</div>
+        <div class="src">only mirror found was OCR&#8209;corrupted ("Govemment", "MINlSTRY") &mdash; dropped rather than index visibly wrong text</div>
       </div>
     </div>
   </section>
 
   <section>
-    <h2 class="sec">The pipeline &mdash; nine fixed stages, always this order</h2>
+    <h2 class="sec">The pipeline &mdash; every real step, always in this exact order</h2>
     <div class="flow">
 
-      <div class="fnode soft"><div class="t">The user's question</div></div>
+      <div class="branch-wrap">
+        <div class="fnode soft"><div class="t">The user's question</div></div>
+        <div class="branch-group info">
+          <div class="bline-col"><span class="blabel">if follow&#8209;up</span><div class="bline"></div></div>
+          <div class="exit info">
+            <div class="t">Understand follow&#8209;up</div>
+            <div class="s">rewrites into a standalone question using the last 3 turns &mdash; shown live, but the rewrite itself is not separately verified; retrieval below still only grounds in the corpus</div>
+          </div>
+        </div>
+      </div>
       <div class="connector"></div>
 
+      <div class="split-row">
+        <div class="split-col">
+          <div class="fnode-half"><div class="t">Vector search</div><div class="s">BAAI/bge&#8209;m3 embeddings</div></div>
+          <div class="connector"></div>
+        </div>
+        <div class="split-col">
+          <div class="fnode-half"><div class="t">BM25 search</div><div class="s">keyword / exact term match</div></div>
+          <div class="connector"></div>
+        </div>
+      </div>
+
       <div class="fnode indigo">
-        <div class="t">Hybrid retrieval</div>
-        <div class="s">vector + BM25 keyword, fused by rank &mdash; top 40 candidates</div>
+        <div class="t">Reciprocal Rank Fusion</div>
+        <div class="s">combines both rankings by position, not raw score &mdash; top 40 candidates</div>
       </div>
       <div class="connector"></div>
 
       <div class="branch-wrap">
         <div class="fnode" style="border-width:2.5px;">
           <div class="t">Layer 1 &mdash; confidence gate</div>
-          <div class="s">best match distance &le; 0.90 ?</div>
+          <div class="s">is the CLOSEST match's distance &le; 0.90? &mdash; calibrated against real query evidence, not guessed</div>
         </div>
         <div class="branch-group">
           <div class="bline-col"><span class="blabel">no</span><div class="bline"></div></div>
           <div class="exit">
             <div class="t">Refused</div>
-            <div class="s">not enough grounded information &mdash; zero LLM calls spent</div>
+            <div class="s">&ldquo;not enough grounded information&rdquo; &mdash; stops here, zero LLM calls spent</div>
           </div>
         </div>
       </div>
@@ -189,20 +233,20 @@
 
       <div class="fnode brass">
         <div class="t">Authority ordering</div>
-        <div class="s">Act &gt; Guideline &gt; Informational, then recency</div>
+        <div class="s">among the confident passages: Act &gt; Guideline &gt; Informational, then most recent first</div>
       </div>
       <div class="connector"></div>
 
       <div class="fnode indigo">
         <div class="t">Generation</div>
-        <div class="s">drafts claims, each tied to exactly one passage</div>
+        <div class="s">drafts each claim in its own words, but tied to exactly ONE cited passage &mdash; never free prose, temperature 0.0</div>
       </div>
       <div class="connector"></div>
 
       <div class="branch-wrap">
         <div class="fnode" style="border-width:2.5px;">
           <div class="t">Layer 2 &mdash; claim verification</div>
-          <div class="s">3 independent votes &mdash; 2&#8209;of&#8209;3 majority required</div>
+          <div class="s">3 separate calls ask &ldquo;does the passage support this?&rdquo; (temp 0.3, distinct seeds) &mdash; 2&#8209;of&#8209;3 must agree</div>
         </div>
         <div class="branch-group">
           <div class="bline-col"><span class="blabel">no</span><div class="bline"></div></div>
@@ -216,18 +260,18 @@
 
       <div class="fnode brass">
         <div class="t">Citation formatted</div>
-        <div class="s" style="font-family:'IBM Plex Mono',monospace">[Source &middot; &sect;section &middot; date]</div>
+        <div class="s" style="font-family:'IBM Plex Mono',monospace">[Source &middot; &sect;section &middot; effective date]</div>
       </div>
       <div class="connector"></div>
 
       <div class="fnode sage-outline">
         <div class="t">Coverage check &mdash; advisory only</div>
-        <div class="s">can add a note &mdash; can <b>never</b> cause a refusal</div>
+        <div class="s">one extra call asks &ldquo;does this actually answer what was asked?&rdquo; &mdash; can attach a note, can <b>never</b> cause a refusal or edit a claim</div>
       </div>
       <div class="connector"></div>
 
       <div class="fnode final">
-        <div class="t">Answer shown &mdash; only the upheld claims, each cited</div>
+        <div class="t">Answer shown &mdash; only the upheld claims, each cited, with a &ldquo;what this left out&rdquo; list underneath</div>
       </div>
 
     </div>
@@ -270,7 +314,7 @@
   </div>
 
   <footer>
-    <p><b>Nine fixed stages, always in this order &mdash; no planner, nothing decides its own next action.</b></p>
+    <p><b>A fixed sequence, always in this exact order &mdash; no planner, nothing decides its own next action.</b></p>
     <p>Six real bugs found by testing, fixed, and measured &mdash; including a silent prompt&#8209;truncation bug and an unretrievable statutory clause &mdash; before two question sets frozen into git proved the fixes generalize.</p>
   </footer>
 
