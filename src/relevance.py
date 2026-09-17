@@ -73,7 +73,7 @@ def judge_relevance(query: str, hits: list[dict], timeout: int = 120) -> list[di
     prompt = RELEVANCE_PROMPT_TEMPLATE.format(
         query=query, passages_block=_build_passages_block(hits)
     )
-    raw = llm_client.complete(prompt, timeout=timeout)
+    raw = llm_client.complete(prompt, timeout=timeout, temperature=0.0, seed=42)
     result = json.loads(raw)
     verdicts = result.get("verdicts")
     if not isinstance(verdicts, list):

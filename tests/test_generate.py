@@ -8,7 +8,46 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from generate import _condense_followup, _select_grounded_hits, answer_query_streaming
+from generate import GENERATION_PROMPT_TEMPLATE, _condense_followup, _select_grounded_hits, answer_query_streaming
+
+
+def test_generation_prompt_instructs_copying_the_passages_own_spelling():
+    """2026-09-16 fix: generation wrote 'Homeopathy' when the passage says
+    'Homoeopathy', and Layer 2 then rejected an otherwise-correct claim over
+    the spelling mismatch. Fixed on the generation side (Layer 2's strictness
+    is untouched) by adding one sentence telling generation to copy the
+    passage's own spelling/wording verbatim."""
+    assert (
+        "Use the passage's own spelling and wording for every name, technical "
+        "term, section number, figure, and date — copy them exactly as they "
+        "appear in the passage, even if a different spelling is more common."
+    ) in GENERATION_PROMPT_TEMPLATE
+
+
+def test_generation_prompt_still_requires_grounding_in_one_passage():
+    """The new spelling-fidelity sentence must be additive, not a replacement
+    for the existing grounding instructions it sits next to."""
+    assert "using ONLY the source passages given below" in GENERATION_PROMPT_TEMPLATE
+    assert "Do not use outside knowledge" in GENERATION_PROMPT_TEMPLATE
+    assert "Every factual claim you make must be directly supported by one of these passages" in GENERATION_PROMPT_TEMPLATE
+
+
+def test_generation_prompt_instructs_using_the_cited_passages_own_section_number():
+    """2026-09-16 fix: generation cited Section 10(4)(a) & (b) as the basis for
+    a claim drawn from a passage (chunk_id patents_act_1970::sec-25-sub-1) that
+    is actually about Section 25 opposition grounds — a section number recalled
+    from general knowledge, not the one in the cited passage. Layer 2 correctly
+    rejected the claim; the fix is generation-side: one more sentence next to
+    the spelling-fidelity instruction telling generation that any section/
+    sub-section/clause number it cites must come from the passage being cited,
+    not from general knowledge or a different passage."""
+    assert (
+        "When your claim states or implies a specific section, sub-section, or "
+        "clause number as the legal basis for a fact, that number must be the "
+        "one that actually appears in the passage you are citing for that "
+        "claim — never a number recalled from general knowledge or a different "
+        "passage, even if it seems more specific or correct."
+    ) in GENERATION_PROMPT_TEMPLATE
 
 
 def _mock_response(response_json_str: str) -> MagicMock:

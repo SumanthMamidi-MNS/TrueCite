@@ -28,6 +28,19 @@ def reciprocal_rank_fusion(
 
 
 def retrieve_hybrid(query: str, top_k: int = 5, candidate_k: int = 20) -> list[dict]:
+    # candidate_k must be at least top_k, or RRF would be asked to return
+    # more results than it was ever given to fuse from. Clamped up rather
+    # than raised: a caller asking for top_k=40 candidate_k=20 clearly wants
+    # 40 results back, and silently narrowing that to "whatever candidate_k
+    # allows" is exactly the bug docs/decisions.md already records once
+    # (generate.py calling retrieve_hybrid(query, top_k=CANDIDATE_K) without
+    # passing candidate_k at all, so RRF only fused the top 20 from each
+    # retriever while the vector-only list it was meant to match was 40
+    # deep — a correctly-worded, rank-29 statutory clause was outside the
+    # narrower window and never entered fusion). Clamping here makes that
+    # mismatch impossible to reintroduce silently, regardless of what any
+    # call site remembers to pass.
+    candidate_k = max(candidate_k, top_k)
     vector_hits = retrieve_vector(query, top_k=candidate_k)
     bm25_hits = retrieve_bm25(query, top_k=candidate_k)
     return reciprocal_rank_fusion(vector_hits, bm25_hits, top_k=top_k)

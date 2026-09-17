@@ -138,6 +138,26 @@ _EXCESS_BLANK_LINES_RE = re.compile(r"\n{3,}")
 _FUSED_FOOTNOTE_BRACKET_RE = re.compile(r"\d{1,3}\[")
 _BARE_BRACKET_RE = re.compile(r"[\[\]]")
 
+# Used by the dash-less section-title fallback (see _chunk_region) to reject a
+# numbered-paragraph guideline's ordinary opening sentence, which can otherwise
+# still slip past that fallback's other checks (short, single period, capital
+# start, substantial text remaining). Indian bare-Act section titles are
+# noun phrases or infinitive constructions ("...not to be made without
+# approval", "...to be laid before Parliament") and never use a finite,
+# conjugated verb the way explanatory prose does ("law HAS adequate
+# provisions", "the Declaration RECOGNIZES the rights") -- confirmed against
+# all 55 real Biological Diversity Act titles this fallback recovers, none of
+# which match. "to have"/"to had" are deliberately excluded from this list
+# since real titles do use that infinitive ("Act to have effect in addition
+# to other Acts").
+_FINITE_VERB_RE = re.compile(
+    r"\b(is|are|was|were|has|recognizes?|provides?|includes?|means|requires?)\b", re.IGNORECASE
+)
+# A real title in this corpus never runs longer than this many words (the
+# longest confirmed real one is 16); a guideline's misread opening sentence
+# regularly does.
+_MAX_TITLE_WORDS = 16
+
 
 def _clean_page_text(text: str) -> str:
     text = _FOOTNOTE_LINE_RE.sub("", text)
@@ -535,7 +555,51 @@ def _chunk_region(
         heading_match = re.match(r"([^—–]{1,150})[—–]", rest_of_line)
         heading = heading_match.group(1).strip().rstrip(".") if heading_match else ""
         if not heading:
-            heading = f"Paragraph {section_number}"
+            # The Biological Diversity Act, 2002 prints section titles with NO
+            # em/en-dash at all -- e.g. "55. Penalties." -- so the dash pattern
+            # above misses every one of its sections, and they all fell through
+            # to the generic "Paragraph N" below. Confirmed directly:
+            # ::sec-55 (the section that answers the Act's own penalty
+            # question) and ::sec-6 (the section sec-55 cross-references, by
+            # number only, for the underlying approval requirement) both had
+            # heading "Paragraph N" instead of their real title -- see
+            # docs/decisions.md. Some of this Act's titles wrap onto the line
+            # immediately after the section number (e.g. "6. Application for
+            # ... without approval of \nNational Biodiversity Authority."), so
+            # the candidate is allowed to borrow that one continuation line --
+            # but no further, since a real title never runs past two printed
+            # lines in this corpus while ordinary body prose regularly does.
+            #
+            # Numbered-paragraph guidelines (WIPO toolkit, IPO TK guidelines)
+            # have no title at all -- their numbered "paragraph" IS the body,
+            # so a short, period-terminated first sentence must not be misread
+            # as a heading (the same risk the dash-pattern comment above
+            # warns about). What tells the two apart isn't the candidate text
+            # itself -- a real title and a short standalone sentence can look
+            # identical -- it's what's left over afterwards: a real heading is
+            # always followed by the section's own substantive body, whereas a
+            # guideline paragraph's opening sentence is often the entire
+            # paragraph, with nothing left but the next section marker.
+            body_lines = body.splitlines()
+            first_line = rest_of_line.strip()
+            candidate = first_line
+            consumed_lines = 1
+            if not candidate.endswith(".") and len(body_lines) > 1:
+                second_line = body_lines[1].strip()
+                candidate = f"{first_line} {second_line}".strip()
+                consumed_lines = 2
+            remaining_body = "\n".join(body_lines[consumed_lines:]).strip()
+            is_title_like = (
+                candidate
+                and len(candidate) <= 150
+                and len(candidate.split()) <= _MAX_TITLE_WORDS
+                and candidate.endswith(".")
+                and candidate.count(".") == 1  # a single terminal period, not a full sentence
+                and not candidate[:1].islower()
+                and not _FINITE_VERB_RE.search(candidate)
+                and len(remaining_body) >= MIN_SECTION_BODY_CHARS
+            )
+            heading = candidate.rstrip(".") if is_title_like else f"Paragraph {section_number}"
 
         abs_body_start = region_start_offset + body_start
         lettered_clause_count = len(_monotonic_lettered_clauses(body))

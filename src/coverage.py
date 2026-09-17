@@ -45,7 +45,7 @@ def assess_coverage(question: str, answer: str, timeout: int = 60) -> dict:
     this function guessing a default verdict.
     """
     prompt = COVERAGE_PROMPT_TEMPLATE.format(question=question, answer=answer)
-    raw = llm_client.complete(prompt, timeout=timeout)
+    raw = llm_client.complete(prompt, timeout=timeout, temperature=0.0, seed=42)
     result = json.loads(raw)
     addresses = result.get("addresses")
     if not isinstance(addresses, bool):

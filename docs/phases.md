@@ -295,6 +295,107 @@ Sequential, gated phases per PRD §9 — no fixed schedule. Each phase gates the
       event). Coverage check unaffected, stays on. Full numbers in decisions.md. 88
       tests pass; live-verified the corrected defaults end-to-end in-browser.
 
+## Phase 9 — Retrieval and verification precision, held-out validation — DONE
+- [x] Root-caused and fixed a silent Ollama `num_ctx` prompt-truncation bug in
+      `src/llm_client.py`: no `options.num_ctx` was set, so Ollama defaulted to 2048
+      tokens and silently front-truncated any longer prompt (kept the end, discarded
+      the start — destroying the generation prompt's own instructions and question
+      before the model ever saw them). Measured directly: a 42,467-char prompt
+      returned `prompt_eval_count: 2050`; a start-of-prompt marker was invisible to
+      the model, an end-of-prompt marker was visible. Fixed: `OLLAMA_NUM_CTX` now
+      defaults to 8192, env-overridable. Direct before/after proof: the WIPO-toolkit
+      "three phases" eval question flipped from false refusal to a correct, exactly-
+      matching verified answer with no other change. Very likely the single largest
+      cause of every prior "local-model quality" failure reported in Phases 4-8.
+- [x] Made LLM sampling reproducible: explicit `temperature`/`seed` threaded through
+      `llm_client.complete()` to all three providers. Generation: `temperature=0.0`,
+      deterministic. Layer 2: `temperature=0.3` with 3 distinct fixed seeds per vote —
+      deliberately not 0.0, since temperature-0 would make all 3 "votes" identical and
+      silently collapse majority-vote into one repeated call.
+- [x] Fixed a hybrid-retrieval candidate-pool bug: `generate.py` called
+      `retrieve_hybrid` without passing `candidate_k`, so RRF fusion only ever
+      combined each retriever's top 20 while Layer 1's vector-only check looked 40
+      deep — the two halves of the pipeline disagreed about how far to look. Fixed by
+      passing `candidate_k=CANDIDATE_K` explicitly; `retrieve_hybrid` now also clamps
+      `candidate_k` up to at least `top_k`.
+- [x] Found and fixed a real statutory-clause retrieval gap:
+      `biological_diversity_act_2002::sec-55` (the penalty question's correct answer)
+      was absent from the top 40 of vector, BM25, AND hybrid search, all three — §55's
+      own text never says "access" (that's in §6, referenced only by number), while
+      §56 ranked 3rd on vector search purely for containing the literal phrase
+      "Penalty for contravention." Fixed with a new module, `src/enrichment.py`:
+      index-time-only cross-reference enrichment appends same-document cross-
+      referenced section headings to a chunk's SCORED text (never its displayed/cited
+      text — enforced by an automated leakage test, not just a comment). Required
+      first fixing `chunking.py` to recover real section headings for the BD Act's
+      dash-less "55. Penalties." style (previously falling through to generic
+      "Paragraph N" placeholders for all ~86 sections). Result: §55 went from absent
+      to **rank 3** in what generation actually receives, zero regressions elsewhere
+      (all 491 chunk_ids/text byte-identical; only BD Act headings changed).
+- [x] Fixed BM25 keyword matching (`bm25_retrieval.py`): added a ~38-word stopword
+      list (legally-significant negation/modality words deliberately kept) and a
+      small hand-rolled suffix stemmer, ASCII-only. Measured: no gold passage left the
+      BM25 top-40 for any of 10 dev-set questions; passage recall@40 improved 9/10 →
+      10/10.
+- [x] Added a contextual header to indexed text (`enrichment.py`, same scored-only
+      safety property): short chunks that never restate their own document's subject
+      (e.g. a 77-char WIPO treaty article) lose to longer chunks repeating the
+      question's topic words. A strictly factual header (title + section label +
+      heading, no invented words, capped ~200 chars) is prepended to scored text only.
+      **Honest, partial result**: real rank improvements elsewhere with zero
+      regressions (kept for that), but did NOT fully close the gap on its own three
+      motivating held-out cases — ranks improved (e.g. hybrid 40→17, 20→13) but none
+      reached the top-8 generation receives. Reported as partial, not solved.
+- [x] Corrected two stale eval ground-truth entries in `run_phase6.py`'s
+      `ANSWERABLE` list: both Biological Diversity Act questions' expected-source
+      sets predated the Act's addition to the corpus by one day, so correct citations
+      were being scored wrong. Fixed against actual chunk text. A second transcription
+      error found and fixed in `run_retrieval_eval.py`'s gold table (and
+      `docs/eval_questions.md`): the TRIPS-interaction question's gold source was
+      `::para-3` (discusses BD Act §6, never mentions TRIPS) instead of the correct
+      `::para-2`.
+- [x] Two generation-side prompt fixes: (a) copy the cited passage's own
+      spelling/wording exactly for names/terms/section numbers/figures/dates (found
+      via a real "Homeopathy" vs. "Homoeopathy" false-refusal case); (b) any section
+      number cited as legal basis must be the one actually in the cited passage, never
+      recalled from elsewhere. Honest note: a 3-seed spot-check found (b) reduces but
+      does not fully eliminate this failure mode — documented as a real, open,
+      partially-mitigated limitation, not claimed fixed.
+- [x] Tried and rejected an unsafe verification-prompt change (spelling-variant
+      tolerance) after the permanent adversarial battery (`run_verification_eval.py`)
+      showed it fixed its target case but caused a different, previously-always-
+      rejected false claim to be wrongly accepted at one seed base. Reverted to the
+      byte-identical prior prompt per the project's own pre-committed rule — a
+      demonstration of the safety discipline working, not a hidden failure.
+- [x] Built and froze two held-out question sets — `docs/heldout_questions.json`
+      (v1) and `docs/heldout_questions_v2.json` (v2, frozen after v1 exposed the
+      short-chunk defect specifically to test whether the contextual-header fix
+      generalizes) — committed to git (`4a7a66d`) BEFORE either was ever run, the
+      verifiable anti-overfitting evidence for this phase.
+- [x] **Final measured numbers**, three separate 3-run evaluations
+      (`run_phase6.py --runs 3 --seed-base 42`, worst case headlined, not best):
+      | Set | Citation acc. (min/med/max) | False refusals | Correct refusals | False answers |
+      |---|---|---|---|---|
+      | Dev (11/5) | 8/9/9 | 1/1/2 | 5/5/5 | 0/0/0 |
+      | Held-out v1 (10/5) | 5/6/6 | 3/3/4 | 5/5/5 | 0/0/0 |
+      | Held-out v2 (10/5) | 6/6/6 | 4/4/4 | 5/5/5 | 0/0/0 |
+      Dev-set pre-session baseline (rescored against the same corrected ground truth):
+      citation accuracy 5/11, false refusals 4/11 — worst-case improved to 8/11 and
+      2/11 respectively. **96 total question-runs across 3 sets x 3 seeded runs —
+      correct-refusal rate 5/5 and false-answer rate 0/5 held on every single run,
+      including both held-out sets.** The system has never, in any measurement this
+      session, produced a confidently-stated false answer; the measured weakness is
+      over-refusal, not hallucination.
+- [x] 186 tests pass (`pytest tests/ -q`). Full evidence and per-question diagnosis in
+      `docs/decisions.md` (2026-09-17 entries) and `README.md`'s "Known limitations"/
+      "Evaluation" sections.
+
+This closes out the pre-pitch technical validation work. No further phase is
+scheduled; remaining open items (provider live-testing against a real key,
+relevance-filter re-measurement post-num_ctx-fix, the synthesis/section-
+misattribution limitations) are documented in README.md's "Known limitations"
+as accepted, disclosed gaps rather than carried as a numbered phase.
+
 ## Notes
 - No fixed calendar — move to the next phase only when the current one is verified working.
 - Known limitation carried forward from Phase 1: TKDL itself isn't public (restricted to

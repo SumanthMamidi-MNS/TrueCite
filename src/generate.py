@@ -26,6 +26,7 @@ same temporary local-Ollama substitution, same one-env-var switch to the
 real Claude API once it's actually in use).
 """
 import json
+import os
 
 import llm_client
 from authority import get_authority
@@ -44,12 +45,18 @@ GENERATION_MODEL = llm_client.active_model_name()
 CANDIDATE_K = 40
 MAX_HISTORY_TURNS = 3
 
+# Fixed seed, temperature 0: generation only ever runs once per query (no
+# vote to preserve, unlike verification below), so there's no reason not to
+# make it fully reproducible — same query, same passages in, same claims
+# out, which matters for eval runs and for debugging a specific answer.
+GENERATION_SEED = int(os.environ.get("GENERATION_SEED", "42"))
+
 REFUSAL_MESSAGE = (
     "I don't have enough grounded information in the corpus to answer this "
     "confidently. Please rephrase, or consult a qualified IP professional."
 )
 
-GENERATION_PROMPT_TEMPLATE = """You are an assistant answering a question about Indian Ayurveda IP/regulatory law, using ONLY the source passages given below. Do not use outside knowledge. Every factual claim you make must be directly supported by one of these passages.
+GENERATION_PROMPT_TEMPLATE = """You are an assistant answering a question about Indian Ayurveda IP/regulatory law, using ONLY the source passages given below. Do not use outside knowledge. Every factual claim you make must be directly supported by one of these passages. Use the passage's own spelling and wording for every name, technical term, section number, figure, and date — copy them exactly as they appear in the passage, even if a different spelling is more common. When your claim states or implies a specific section, sub-section, or clause number as the legal basis for a fact, that number must be the one that actually appears in the passage you are citing for that claim — never a number recalled from general knowledge or a different passage, even if it seems more specific or correct.
 
 For each claim, first find the passage that is MOST SPECIFICALLY and DIRECTLY on point for the question — a passage that discusses the exact topic asked about beats a passage that is merely more general or from a higher-authority document but doesn't address the specific point. Only when two or more passages are EQUALLY specific and directly on point should you prefer the one earlier in the list below (they are pre-sorted by authority for exactly that tie-breaking case, not as a general preference).
 
@@ -97,7 +104,17 @@ def _select_grounded_hits_with_diagnostics(query: str, top_k: int) -> tuple[list
     confident_ids = {h["chunk_id"] for h in vector_hits if h["distance"] <= CONFIDENCE_THRESHOLD}
     diagnostics["confident_candidates"] = len(confident_ids)
 
-    hybrid_hits = retrieve_hybrid(query, top_k=CANDIDATE_K)
+    # candidate_k must be passed explicitly here, not left at retrieve_hybrid's
+    # own default (20) — this call already asks for top_k=CANDIDATE_K (40),
+    # and without candidate_k=CANDIDATE_K too, RRF was only ever fusing the
+    # top 20 from each retriever while the vector list used for Layer 1 above
+    # is 40 deep: the two halves of the pipeline disagreed about how far down
+    # they look, so anything at vector rank 21-40 never entered fusion at
+    # all. Same shape of bug docs/decisions.md already records once (CANDIDATE_K
+    # itself was raised 20->40 after a correctly-worded statutory clause
+    # ranked #29 was outside the old fetch window) — a retrieval window too
+    # narrow to reach a passage that's actually there.
+    hybrid_hits = retrieve_hybrid(query, top_k=CANDIDATE_K, candidate_k=CANDIDATE_K)
     candidates = [h for h in hybrid_hits if h["chunk_id"] in confident_ids]
     if not candidates:
         # Hybrid's own top-K didn't include any Layer-1-confident chunk even
@@ -153,7 +170,7 @@ def _generate_draft_claims(query: str, hits: list[dict]) -> list[dict]:
     prompt = GENERATION_PROMPT_TEMPLATE.format(
         query=query, passages_block=_build_passages_block(hits)
     )
-    raw = llm_client.complete(prompt, timeout=180)
+    raw = llm_client.complete(prompt, timeout=180, temperature=0.0, seed=GENERATION_SEED)
     result = json.loads(raw)
     claims = result.get("claims", [])
     if not isinstance(claims, list):
@@ -178,7 +195,7 @@ def _condense_followup(query: str, history: list[dict]) -> str:
     prompt = CONDENSE_PROMPT_TEMPLATE.format(
         history_block=_format_history(history), query=query
     )
-    raw = llm_client.complete(prompt, timeout=60)
+    raw = llm_client.complete(prompt, timeout=60, temperature=0.0, seed=GENERATION_SEED)
     result = json.loads(raw)
     standalone = result.get("standalone_question")
     if not isinstance(standalone, str) or not standalone.strip():

@@ -66,7 +66,7 @@ corpus. Flagging rather than faking results for them.
 
 12. **Q:** How does India's approach to protecting traditional knowledge in patent law interact with its TRIPS obligations?
     **Expected:** TRIPS requires national treatment (no less favorable treatment of foreign applicants), so India cannot restrict Ayurvedic-medicine patents to Indian companies only — but non-patentability grounds like §3(p) apply equally regardless of applicant nationality.
-    **Source:** `pib_faq_patents_traditional_ayurvedic_medicine_2013::para-3`
+    **Source:** `pib_faq_patents_traditional_ayurvedic_medicine_2013::para-2` (2026-09-16: corrected from `::para-3` — a transcription error; `::para-3` discusses Biological Diversity Act §6 approval and never mentions TRIPS at all, while the actual TRIPS/national-treatment discussion is in `::para-2`. Found while building `src/run_retrieval_eval.py`'s gold table and verified by reading both chunks directly.)
 
 ## C. Deliberately unanswerable (must refuse, not guess)
 

@@ -36,7 +36,7 @@ def translate_answer(text: str, language: str = "Hindi", timeout: int = 60) -> s
     that can't be parsed shouldn't be silently swapped for the original or
     for an empty string."""
     prompt = TRANSLATE_PROMPT_TEMPLATE.format(language=language, text=text)
-    raw = llm_client.complete(prompt, timeout=timeout)
+    raw = llm_client.complete(prompt, timeout=timeout, temperature=0.0, seed=42)
     result = json.loads(raw)
     translated = result.get("translated")
     if not isinstance(translated, str) or not translated.strip():
