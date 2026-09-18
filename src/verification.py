@@ -145,17 +145,18 @@ def verify_claim(
     for seed in VERIFICATION_SEEDS[:votes]:
         try:
             results.append(_verify_claim_once(claim, passage, timeout, seed))
-        except llm_client.ProviderRateLimited:
+        except (llm_client.ProviderRateLimited, llm_client.ProviderUnreachable):
             # Must NOT be swallowed by the broad tolerance below. If it
-            # were, a rate-limited provider would fail every vote silently,
+            # were, an unavailable provider would fail every vote silently,
             # this function would then raise a generic ValueError ("all N
             # votes failed"), and the caller (generate.py) would drop the
             # claim as "verification unavailable" exactly like an ordinary
             # parse failure — eventually producing the Layer 2 grounding
             # refusal when every claim is dropped that way. That is exactly
-            # the confusion this exception exists to prevent (see
-            # llm_client.ProviderRateLimited's docstring), so it propagates
-            # immediately instead of being retried per-vote or absorbed here.
+            # the confusion these exceptions exist to prevent (see
+            # llm_client.ProviderRateLimited's and ProviderUnreachable's
+            # docstrings), so either propagates immediately instead of being
+            # retried per-vote or absorbed here.
             raise
         except Exception:
             # Broad on purpose: must tolerate a failed vote the same way

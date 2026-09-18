@@ -38,7 +38,57 @@ class ProviderRateLimited(Exception):
     underlying cause is never lost, only reclassified.
 
     Ollama (the local default) has no rate-limit concept and never raises
-    this — see _complete_ollama, deliberately untouched by any of this.
+    this — see _complete_ollama. When Ollama itself is unreachable it raises
+    the separate ProviderUnreachable below instead (not this class): the two
+    are deliberately kept apart rather than merged under one name, because
+    "the provider said slow down" and "the provider can't be reached at all"
+    are different failures with different honest descriptions, even though
+    generate.py chooses to react to both the same way (see ProviderUnreachable's
+    docstring for why the reaction is shared but the class is not).
+    """
+
+
+class ProviderUnreachable(Exception):
+    """Raised when the configured provider's HTTP endpoint could not be
+    reached at all (connection refused, DNS failure, or a request that timed
+    out waiting for a response) — as opposed to ProviderRateLimited above,
+    where the provider WAS reached and explicitly said "slow down" (HTTP 429
+    or its SDK equivalent). Conflating the two under one name would hide a
+    real distinction from anyone reading this code later: a rate limit often
+    clears on its own in a few seconds, "Ollama isn't running" or "hung past
+    its timeout" does not.
+
+    Currently only raised by _complete_ollama. A local Ollama server being
+    down/wrong-port is the case this was written for (see the 2026-09-18 bug
+    report in docs/decisions.md): `requests.post` raised a bare
+    `requests.exceptions.ConnectionError` that nothing caught, so it
+    propagated all the way through generate.py's streaming generator to the
+    SSE layer and rendered as a raw, alarming stack-trace-looking string in
+    the chat UI's error box (web/app.js's generic `error` event path) —
+    exactly the kind of infrastructure failure this project's design
+    principle says must never be shown to the user as-is, or confused with
+    "the corpus doesn't support this answer."
+
+    `requests.exceptions.Timeout` raises this too, not because a slow
+    response is the same underlying condition as connection-refused, but
+    because it hits the identical downstream bug (an uncaught exception
+    reaching the SSE layer as raw text) and deserves the identical honest,
+    non-technical message — and because retrying a call that already used
+    its full timeout budget would just make the user wait that same amount
+    again for what will very likely be the same outcome.
+
+    Deliberately NOT retried, unlike ProviderRateLimited: this failure isn't
+    the kind that a 1-3 second backoff resolves, so retrying would only
+    delay an identical failure rather than have a real chance of avoiding
+    it. The caller gets this on the very first attempt.
+
+    generate.py's answer_query_streaming catches this alongside
+    ProviderRateLimited at every call site and emits the same
+    `provider_unavailable` SSE event with the same message — from the
+    user's point of view, "the model is rate-limited" and "the model can't
+    be reached" both mean the same thing (try again shortly, this has
+    nothing to do with the corpus), even though the code keeps the two
+    conditions honestly distinct internally.
     """
 
 
@@ -110,25 +160,36 @@ def estimate_tokens(text: str) -> int:
 
 def _complete_ollama(prompt: str, timeout: int, temperature: float, seed: int | None) -> str:
     # Deliberately does NOT go through _complete_with_rate_limit_retry — a
-    # local Ollama server has no rate-limit/quota concept, and its failure
-    # mode is `requests.exceptions.HTTPError` (from raise_for_status below),
-    # a type neither rate-limit detector above ever matches, so this can't
-    # be accidentally reclassified as ProviderRateLimited.
-    response = requests.post(
-        OLLAMA_URL,
-        json={
-            "model": OLLAMA_MODEL,
-            "prompt": prompt,
-            "stream": False,
-            "format": "json",
-            "options": {
-                "num_ctx": OLLAMA_NUM_CTX,
-                "temperature": temperature,
-                **({"seed": seed} if seed is not None else {}),
+    # local Ollama server has no rate-limit/quota concept, and an HTTP-level
+    # failure (`requests.exceptions.HTTPError` from raise_for_status below)
+    # is a type neither rate-limit detector above ever matches, so it can't
+    # be accidentally reclassified as ProviderRateLimited; it propagates as
+    # itself, unchanged.
+    #
+    # A connection failure or timeout is different: left uncaught, it used
+    # to propagate as a raw requests exception all the way to the SSE layer
+    # and render as a stack-trace-looking string in the chat UI (see
+    # ProviderUnreachable's docstring). Reclassified here instead — no
+    # retry, single attempt — so generate.py can react to it the same
+    # honest way it already reacts to ProviderRateLimited.
+    try:
+        response = requests.post(
+            OLLAMA_URL,
+            json={
+                "model": OLLAMA_MODEL,
+                "prompt": prompt,
+                "stream": False,
+                "format": "json",
+                "options": {
+                    "num_ctx": OLLAMA_NUM_CTX,
+                    "temperature": temperature,
+                    **({"seed": seed} if seed is not None else {}),
+                },
             },
-        },
-        timeout=timeout,
-    )
+            timeout=timeout,
+        )
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+        raise ProviderUnreachable(str(exc)) from exc
     response.raise_for_status()
     return response.json()["response"]
 

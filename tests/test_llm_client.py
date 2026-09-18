@@ -344,3 +344,70 @@ def test_ollama_error_never_raises_provider_rate_limited():
     with patch("llm_client.requests.post", return_value=mock_response):
         with pytest.raises(requests_lib.exceptions.HTTPError):
             llm_client.complete("a prompt", timeout=10)
+
+
+# --- ProviderUnreachable (2026-09-18 fix) -----------------------------------
+#
+# Confirmed live, from a real screenshot: with Ollama not running,
+# `requests.post` raises `requests.exceptions.ConnectionError`, which was
+# previously not caught anywhere and propagated as a raw Python exception
+# string all the way to the chat UI's generic error box. This must instead
+# be reclassified as ProviderUnreachable, with NO retry (unlike
+# ProviderRateLimited above) — see llm_client.py's ProviderUnreachable
+# docstring for why a connection failure isn't worth retrying the way a
+# rate limit is.
+
+
+def test_ollama_connection_error_raises_provider_unreachable_without_retry():
+    import requests as requests_lib
+
+    with patch(
+        "llm_client.requests.post",
+        side_effect=requests_lib.exceptions.ConnectionError("[WinError 10061] refused"),
+    ) as mock_post, patch("llm_client.time.sleep") as mock_sleep:
+        with pytest.raises(llm_client.ProviderUnreachable, match="refused"):
+            llm_client.complete("a prompt", timeout=10)
+
+    # Exactly one attempt — a connection-refused failure is not transient in
+    # the way a rate limit can be, so retrying would only make the user wait
+    # longer for the identical outcome.
+    mock_post.assert_called_once()
+    mock_sleep.assert_not_called()
+
+
+def test_ollama_timeout_raises_provider_unreachable_without_retry():
+    # A hung/overloaded Ollama hits the same "raw exception reaches the UI"
+    # bug as connection-refused, so it gets the same treatment: reclassified,
+    # not retried (see ProviderUnreachable's docstring for the reasoning).
+    import requests as requests_lib
+
+    with patch(
+        "llm_client.requests.post",
+        side_effect=requests_lib.exceptions.Timeout("timed out"),
+    ) as mock_post, patch("llm_client.time.sleep") as mock_sleep:
+        with pytest.raises(llm_client.ProviderUnreachable, match="timed out"):
+            llm_client.complete("a prompt", timeout=10)
+
+    mock_post.assert_called_once()
+    mock_sleep.assert_not_called()
+
+
+def test_ollama_provider_unreachable_is_distinct_from_provider_rate_limited():
+    # A future reader must be able to tell the two apart by type — see
+    # ProviderUnreachable's docstring for why they're kept as separate
+    # classes even though generate.py reacts to both identically.
+    import requests as requests_lib
+
+    assert not issubclass(llm_client.ProviderUnreachable, llm_client.ProviderRateLimited)
+    assert not issubclass(llm_client.ProviderRateLimited, llm_client.ProviderUnreachable)
+
+    with patch(
+        "llm_client.requests.post",
+        side_effect=requests_lib.exceptions.ConnectionError("refused"),
+    ):
+        with pytest.raises(llm_client.ProviderUnreachable):
+            llm_client.complete("a prompt", timeout=10)
+        # And specifically not raised as ProviderRateLimited.
+        with pytest.raises(llm_client.ProviderUnreachable) as exc_info:
+            llm_client.complete("a prompt", timeout=10)
+    assert not isinstance(exc_info.value, llm_client.ProviderRateLimited)

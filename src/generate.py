@@ -57,14 +57,23 @@ REFUSAL_MESSAGE = (
 )
 
 # A THIRD, distinct terminal state alongside "complete" and "refused" — see
-# ProviderRateLimited's docstring in llm_client.py. This must never be
-# spelled like REFUSAL_MESSAGE above: that message is specifically about the
-# corpus not grounding an answer (Layer 1/2's job), while this one is about
-# the LLM infrastructure itself being temporarily unreachable — an entirely
-# different thing the user needs to know, and act on differently (retry
-# shortly, vs. rephrase or consult a professional).
+# ProviderRateLimited's and ProviderUnreachable's docstrings in llm_client.py.
+# This must never be spelled like REFUSAL_MESSAGE above: that message is
+# specifically about the corpus not grounding an answer (Layer 1/2's job),
+# while this one is about the LLM infrastructure itself being temporarily
+# unavailable — an entirely different thing the user needs to know, and act
+# on differently (retry shortly, vs. rephrase or consult a professional).
+#
+# One shared message covers both underlying causes (a rate-limited cloud
+# provider, or a plain-unreachable one like a stopped local Ollama) —
+# matching the existing pattern here (this constant was already reused
+# across the condense/generation/verification call sites below regardless of
+# which cloud provider raised it) rather than inventing per-site or
+# per-cause wording. It deliberately avoids "busy", which specifically
+# implies a rate limit, since that's inaccurate when the real cause is
+# "unreachable" — "isn't available" is honest either way.
 PROVIDER_UNAVAILABLE_MESSAGE = (
-    "The AI service is temporarily busy — please try again in a moment."
+    "The AI model isn't available right now — please try again in a moment."
 )
 
 
@@ -286,14 +295,15 @@ def answer_query_streaming(
         yield {"type": "stage", "stage": "condense", "status": "start"}
         try:
             effective_query = _condense_followup(query, history[-MAX_HISTORY_TURNS:])
-        except llm_client.ProviderRateLimited:
+        except (llm_client.ProviderRateLimited, llm_client.ProviderUnreachable):
             # Deliberately NOT folded into the fail-open Exception handler
             # below. Falling back to the raw query here would just delay the
             # same failure to the generation call a few lines down (still
-            # the same rate-limited provider) at the cost of a wasted
+            # the same unavailable provider) at the cost of a wasted
             # retrieval pass and more retry latency already spent above —
-            # stopping now, with an honest "infrastructure busy" event, is
-            # both faster and doesn't dress up an outage as anything else.
+            # stopping now, with an honest "infrastructure unavailable"
+            # event, is both faster and doesn't dress up an outage as
+            # anything else.
             yield _provider_unavailable_event()
             return
         except Exception:
@@ -375,7 +385,7 @@ def answer_query_streaming(
     yield {"type": "stage", "stage": "generation", "status": "start"}
     try:
         draft_claims = _generate_draft_claims(effective_query, hits)
-    except llm_client.ProviderRateLimited:
+    except (llm_client.ProviderRateLimited, llm_client.ProviderUnreachable):
         yield _provider_unavailable_event()
         return
     yield {
@@ -409,13 +419,14 @@ def answer_query_streaming(
 
         try:
             verdict = verify_claim(claim["text"], chunk["text"])
-        except llm_client.ProviderRateLimited:
-            # Same reasoning as the generation/condense call sites: a
-            # rate-limited provider must surface as "infrastructure busy",
-            # never as a per-claim "verification unavailable" that quietly
-            # accumulates into a Layer 2 grounding refusal once every claim
-            # has been dropped this way (see verification.py's re-raise of
-            # this exact exception, for exactly this reason).
+        except (llm_client.ProviderRateLimited, llm_client.ProviderUnreachable):
+            # Same reasoning as the generation/condense call sites: an
+            # unavailable provider (rate-limited or plain unreachable) must
+            # surface as "infrastructure unavailable", never as a per-claim
+            # "verification unavailable" that quietly accumulates into a
+            # Layer 2 grounding refusal once every claim has been dropped
+            # this way (see verification.py's re-raise of these exact
+            # exceptions, for exactly this reason).
             yield _provider_unavailable_event()
             return
         except Exception as exc:
