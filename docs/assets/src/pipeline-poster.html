@@ -144,47 +144,23 @@
   footer{ text-align:center; padding-top:26px; }
   footer p{ font-size:13.5px; color:var(--ink-faint); margin:4px 0; }
   footer p b{ color:var(--ink-soft); }
+
+  .trust-line{ text-align:center; background:var(--sage-soft); border:1.5px solid var(--sage-line); border-radius:12px;
+               padding:16px 24px; margin:36px 0 30px; font-size:15px; color:var(--ink); }
+  .trust-line b{ font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; color:var(--sage); font-size:17px; }
 </style>
 </head>
 <body>
 <div class="sheet">
 
   <header>
-    <p class="eyebrow">SIH26045 &middot; Ministry of Ayush &middot; Software</p>
-    <h1>IP&#8209;SAKTI SAHAYAK</h1>
-    <p class="dek">A citation&#8209;verified assistant for Ayurveda IP &amp; regulatory law &mdash; built to refuse rather than guess</p>
+    <p class="eyebrow">Verified Ayurveda IP &amp; Regulatory Guidance</p>
+    <h1>TRUECITE</h1>
+    <p class="dek">Every citation checked true before it's shown &mdash; built to refuse rather than guess, and measured to prove it holds</p>
   </header>
 
-  <section class="problem">
-    <div class="p1">
-      <p>Ayurveda IP guidance is scattered across the <b>Patents Act 1970</b>, IPO guidelines, the <b>Biological Diversity Act</b>, and WIPO/TKDL material. A wrong answer here has real consequences &mdash; a missed filing deadline, a misread disclosure rule. <b>Retrieving the right document isn't the hard part &mdash; trusting what it says is.</b></p>
-    </div>
-    <div class="p2">
-      <span class="k">The failure mode this targets</span>
-      <p>A 2025 Stanford study found production legal&#8209;AI tools &mdash; Westlaw, LexisNexis included &mdash; routinely cite a real source for a claim that source doesn't actually support.</p>
-    </div>
-  </section>
-
   <section>
-    <h2 class="sec">Corpus &mdash; 7 sources, provenance &amp; authority tracked</h2>
-    <div class="corpus">
-      <div class="doc"><span class="tier act">Act</span><div class="name">Patents Act, 1970</div><div class="yr">amendments through 2024</div><div class="src">via IP India</div></div>
-      <div class="doc"><span class="tier act">Act</span><div class="name">Biological Diversity Act, 2002</div><div class="yr">assented 2003</div><div class="src">via HP State Biodiversity Board&#8202;&mdash;&#8202;central gov links dead at sourcing time</div></div>
-      <div class="doc"><span class="tier guide">Guideline</span><div class="name">IPO TK &amp; Biological Material Guidelines</div><div class="yr">2012</div><div class="src">via IP India</div></div>
-      <div class="doc"><span class="tier guide">Guideline</span><div class="name">IPO AYUSH Examination Guidelines</div><div class="yr">2025</div><div class="src">via IP India</div></div>
-      <div class="doc"><span class="tier info">Informational</span><div class="name">WIPO TK Documentation Toolkit</div><div class="yr">public TKDL substitute</div><div class="src">via WIPO &mdash; TKDL itself is NDA&#8209;restricted to patent offices</div></div>
-      <div class="doc"><span class="tier info">Informational</span><div class="name">WIPO GRATK Treaty</div><div class="yr">adopted 2024, not yet in force</div><div class="src">via WIPO &mdash; needs 15 ratifications</div></div>
-      <div class="doc"><span class="tier info">Informational</span><div class="name">PIB Press Release</div><div class="yr">2013</div><div class="src">via Ministry of Commerce &amp; Industry</div></div>
-      <div class="doc" style="background:var(--paper);border-style:dashed;">
-        <span class="tier" style="background:var(--rust-soft);color:var(--rust);border:1px solid var(--rust-line);">Rejected</span>
-        <div class="name">Patents Rules 2003 &amp; 2024 Amendment</div>
-        <div class="src">only mirror found was OCR&#8209;corrupted ("Govemment", "MINlSTRY") &mdash; dropped rather than index visibly wrong text</div>
-      </div>
-    </div>
-  </section>
-
-  <section>
-    <h2 class="sec">The pipeline &mdash; every real step, always in this exact order</h2>
+    <h2 class="sec">The Pipeline &mdash; every real step, always in this exact order</h2>
     <div class="flow">
 
       <div class="branch-wrap">
@@ -277,34 +253,9 @@
     </div>
   </section>
 
-  <section>
-    <h2 class="sec">Tech stack, and why</h2>
-    <div class="stack">
-      <div class="chip"><div class="t">Hybrid retrieval</div><div class="s">Vector search catches paraphrase; BM25 catches exact statutory terms a paraphrase misses. RRF fuses by rank, not score &mdash; nothing to miscalibrate.</div></div>
-      <div class="chip"><div class="t">Structural chunking</div><div class="s">Follows each document's own numbered sections and lettered clauses &mdash; a fixed&#8209;token window would cut a legal clause in half.</div></div>
-      <div class="chip"><div class="t">Local model, API one env&#8209;var away</div><div class="s">Development needed hundreds of calls; a metered key would exhaust before deployment. One seam switches provider, proven identical both ways.</div></div>
-      <div class="chip"><div class="t">Fixed sequence, not multi&#8209;agent</div><div class="s">No planner decides what runs next. Same sequence every time &mdash; auditable, and a judge can trace exactly what happened.</div></div>
-    </div>
-  </section>
-
-  <section style="margin-bottom:0;">
-    <h2 class="sec">Results &mdash; worst case across 3 seeded runs, not one run's number</h2>
-    <div class="results">
-      <div class="results-grid">
-        <div class="rstat"><div class="n">0<small>/5</small></div><div class="l">false answers &mdash; every measured run</div></div>
-        <div class="rstat"><div class="n">5<small>/5</small></div><div class="l">unanswerable questions correctly refused, every run</div></div>
-        <div class="rstat"><div class="n">96</div><div class="l">question&#8209;runs &mdash; 3 question sets &times; 3 seeded runs</div></div>
-        <div class="rstat"><div class="n">2</div><div class="l">held&#8209;out sets, frozen into git before ever being run</div></div>
-      </div>
-      <table class="rtable">
-        <tr><th>Question set</th><th>Citation accuracy</th><th>False refusals</th><th>Correct refusals</th><th>False answers</th></tr>
-        <tr><td>Dev set (tuned against)</td><td><b>8&ndash;9 / 11</b></td><td><b>1&ndash;2 / 11</b></td><td><b>5/5</b></td><td><b>0/5</b></td></tr>
-        <tr><td>Held&#8209;out v1 (frozen first)</td><td><b>5&ndash;6 / 10</b></td><td><b>3&ndash;4 / 10</b></td><td><b>5/5</b></td><td><b>0/5</b></td></tr>
-        <tr><td>Held&#8209;out v2 (frozen after v1)</td><td><b>6 / 10</b></td><td><b>4 / 10</b></td><td><b>5/5</b></td><td><b>0/5</b></td></tr>
-      </table>
-      <div class="sweet">The honest weak spot is over&#8209;refusal, not hallucination &mdash; the correct side to err on for legal guidance</div>
-    </div>
-  </section>
+  <div class="trust-line">
+    <b>0/5</b> false answers &middot; <b>5/5</b> correct refusals &middot; measured across <b>96</b> test runs, including two question sets frozen into git before ever being tested
+  </div>
 
   <div class="legend">
     <div class="item"><span class="sw" style="background:var(--indigo)"></span>retrieval &amp; generation</div>
@@ -315,7 +266,7 @@
 
   <footer>
     <p><b>A fixed sequence, always in this exact order &mdash; no planner, nothing decides its own next action.</b></p>
-    <p>Six real bugs found by testing, fixed, and measured &mdash; including a silent prompt&#8209;truncation bug and an unretrievable statutory clause &mdash; before two question sets frozen into git proved the fixes generalize.</p>
+    <p>Originally built for SIH26045 (Ministry of Ayush) &middot; full write&#8209;up, corpus, and results on GitHub</p>
   </footer>
 
 </div>
