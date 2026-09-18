@@ -1,4 +1,4 @@
-/* IP-SAKTI Sahayak — consultation client.
+/* TrueCite — consultation client.
    Plain JS, no build step: nothing between this and a demo screen that can break.
 
    Shape is a chat app because that's how the tool is actually used — an officer

@@ -2,8 +2,6 @@
 __pycache__/
 *.pyc
 .env
-corpus/processed/*.json
 corpus/eval_results/
-chroma_db/
 *.log
 .claude/scheduled_tasks.lock

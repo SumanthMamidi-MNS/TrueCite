@@ -29,7 +29,7 @@ from translation import translate_answer  # noqa: E402
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
-app = FastAPI(title="IP-SAKTI Sahayak")
+app = FastAPI(title="TrueCite")
 
 
 def _sse(event: dict) -> str:
