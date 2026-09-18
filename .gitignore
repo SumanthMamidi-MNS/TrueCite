@@ -4,4 +4,5 @@ __pycache__/
 .env
 corpus/eval_results/
 *.log
-.claude/scheduled_tasks.lock
+.claude/
+CLAUDE.md

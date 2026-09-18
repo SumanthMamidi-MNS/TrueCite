@@ -9,7 +9,7 @@ threshold, per-claim verification verdicts — as they happen, which is both
 better feedback and a more honest depiction of what the system is doing than
 a spinner.
 
-Run: .venv/Scripts/uvicorn.exe src.api:app  (or via .claude/launch.json)
+Run: .venv/Scripts/uvicorn.exe src.api:app
 """
 import json
 import sys

@@ -10,7 +10,13 @@ WORKDIR /app
 # change (e.g. a README edit) doesn't invalidate this layer and force a full
 # reinstall of sentence-transformers/torch/chromadb on every rebuild.
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# sentence-transformers pulls in torch; PyPI's default wheel bundles full
+# CUDA support (~3GB of libraries this CPU-only deployment never uses).
+# Installing the CPU-only build first, pinned to the version
+# requirements.txt's resolver picks, keeps the rest of the install from
+# quietly pulling the CUDA build back in.
+RUN pip install --no-cache-dir torch==2.14.0+cpu --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir -r requirements.txt
 
 # Only what src/api.py actually reads at request time (see src/generate.py,
 # src/indexing.py, src/retrieval.py, src/bm25_retrieval.py):
@@ -25,9 +31,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 #                         authority.py), kept in the image for provenance and
 #                         so the corpus can be reprocessed from inside a
 #                         running container if ever needed
-# docs/, tests/, .claude/, and corpus/eval_results/ are deliberately left out
-# — none of them are needed to serve the app, and leaving them out keeps the
-# image lean.
+# docs/, tests/, and corpus/eval_results/ are deliberately left out — none
+# of them are needed to serve the app, and leaving them out keeps the image
+# lean.
 COPY src/ ./src/
 COPY web/ ./web/
 COPY corpus/raw/ ./corpus/raw/
