@@ -84,6 +84,26 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
   opacity: 1; transition: opacity .4s var(--ease);
 }
 .splash.hide { opacity: 0; pointer-events: none; }
+
+/* Staggered entrance: mark, then wordmark, then tagline, then the progress
+   unit, each rising/fading in a short beat after the previous one — CSS
+   animation-delay, not JS-timed, so it can never gate or slow the real
+   loading below it (see hideSplash() in app.js, unchanged by this). Total
+   spread is ~0.5s, well under a second, so it reads as one deliberate
+   reveal rather than a delay. `both` holds the pre-animation (opacity: 0)
+   state until each element's delay elapses, then holds the end state after —
+   without it every element would flash visible at t=0 before its animation
+   started. */
+.splash-mark, .splash-word, .splash-tag, .splash-progress {
+  opacity: 0;
+  animation: splashRise .5s var(--ease) both;
+}
+.splash-mark { animation-delay: 0s; }
+.splash-word { animation-delay: .12s; }
+.splash-tag { animation-delay: .24s; }
+.splash-progress { animation-delay: .36s; }
+@keyframes splashRise { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+
 .splash-mark {
   display: grid; place-items: center; width: 52px; height: 52px; border-radius: 15px;
   background: linear-gradient(145deg, rgba(242,197,124,.16), rgba(224,163,85,.04));
@@ -96,13 +116,23 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 .splash-word strong { font-weight: 700; color: var(--text); }
 .splash-word span { font-weight: 500; color: var(--text); }
 .splash-tag { font-size: .82rem; color: var(--text-mute); }
-.splash-bar { width: 140px; height: 3px; margin-top: .5rem; border-radius: 999px; background: rgba(255,255,255,.07); overflow: hidden; }
+
+.splash-progress { display: flex; flex-direction: column; align-items: center; gap: .5rem; margin-top: .5rem; }
+.splash-bar { width: 140px; height: 3px; border-radius: 999px; background: rgba(255,255,255,.07); overflow: hidden; }
 .splash-bar-fill {
   width: 40%; height: 100%; border-radius: 999px;
   background: linear-gradient(90deg, var(--gold-500), var(--gold-400));
   animation: splashSlide 1.3s ease-in-out infinite;
 }
 @keyframes splashSlide { 0% { transform: translateX(-120%); } 100% { transform: translateX(350%); } }
+/* Rotating micro-copy — cycled by app.js's startSplashStatusCycle(), capped
+   the moment the real load finishes (hideSplash clears that interval).
+   Monospace + muted, same register as the model-note/corpus-note badges
+   elsewhere in the app, so it reads as a status line, not a second tagline. */
+.splash-status {
+  font-family: var(--font-mono); font-size: .68rem; letter-spacing: .02em;
+  color: var(--text-mute); min-height: 1.2em;
+}
 
 /* ══════════ app shell ══════════ */
 
@@ -519,4 +549,13 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
   .thread { scroll-behavior: auto; }
+  /* The blanket rule above zeroes animation DURATION but not DELAY, which
+     on its own would still hold the splash's mark/wordmark/tagline/progress
+     at opacity:0 until each one's animation-delay elapsed, then pop them in
+     one at a time — a staggered reveal in miniature, exactly what this
+     media query exists to remove. Cancel the animation outright instead, so
+     everything in the splash is visible/resolved with no sequencing at all. */
+  .splash-mark, .splash-word, .splash-tag, .splash-progress {
+    animation: none !important; opacity: 1; transform: none;
+  }
 }

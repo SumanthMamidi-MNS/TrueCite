@@ -9,7 +9,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import llm_client
-from generate import GENERATION_PROMPT_TEMPLATE, _condense_followup, _select_grounded_hits, answer_query_streaming
+from generate import (
+    GENERATION_PROMPT_TEMPLATE,
+    PROVIDER_BUSY_MESSAGE,
+    PROVIDER_UNREACHABLE_MESSAGE,
+    _condense_followup,
+    _select_grounded_hits,
+    answer_query_streaming,
+)
 
 # Referenced as `llm_client.ProviderRateLimited` / `llm_client.ProviderUnreachable`
 # (not `from llm_client import ...`) throughout this file on purpose:
@@ -324,7 +331,14 @@ def test_coverage_not_called_on_verification_refusal():
 # generate.py's _provider_unavailable_event). Each test below asserts the
 # generator yields exactly one `provider_unavailable` event and then stops —
 # no `complete`, no `refused` afterward. Parametrized across both exception
-# types at each call site: generate.py must react identically to either.
+# types at each call site: generate.py must route to the same event type for
+# either, but the message text is cause-specific (see generate.py's
+# PROVIDER_BUSY_MESSAGE/PROVIDER_UNREACHABLE_MESSAGE) — this helper picks the
+# expected string to match whichever exception the test is parametrized with.
+
+
+def _expected_unavailable_message(exc):
+    return PROVIDER_BUSY_MESSAGE if isinstance(exc, llm_client.ProviderRateLimited) else PROVIDER_UNREACHABLE_MESSAGE
 
 
 @pytest.mark.parametrize(
@@ -341,7 +355,7 @@ def test_generation_provider_unavailable_yields_event_and_stops(exc):
 
     assert events[-1] == {
         "type": "provider_unavailable",
-        "message": "The AI model isn't available right now — please try again in a moment.",
+        "message": _expected_unavailable_message(exc),
     }
     assert not any(e["type"] in ("complete", "refused") for e in events)
     mock_verify.assert_not_called()
@@ -363,7 +377,7 @@ def test_verification_provider_unavailable_yields_event_and_stops(exc):
 
     assert events[-1] == {
         "type": "provider_unavailable",
-        "message": "The AI model isn't available right now — please try again in a moment.",
+        "message": _expected_unavailable_message(exc),
     }
     assert not any(e["type"] in ("complete", "refused") for e in events)
     # Never reached coverage — the generator stopped at verification.
@@ -401,7 +415,7 @@ def test_condense_provider_unavailable_yields_event_and_stops(exc):
 
     assert events[-1] == {
         "type": "provider_unavailable",
-        "message": "The AI model isn't available right now — please try again in a moment.",
+        "message": _expected_unavailable_message(exc),
     }
     assert not any(e["type"] in ("complete", "refused") for e in events)
     # Must not proceed to retrieval on an unavailable-provider condense —

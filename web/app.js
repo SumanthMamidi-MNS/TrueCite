@@ -592,23 +592,82 @@ function formatModelName(raw) {
 // so instead of carrying "local" over by mistake.
 const PROVIDER_LABELS = { ollama: "local (Ollama)", anthropic: "Anthropic API", gemini: "Gemini API" };
 
+// The "Known limitations" modal's first bullet is the one fact that changes
+// with whichever provider is actually configured (see index.html's
+// #limit-provider, README's Known limitations section). Built from
+// /api/config's real {model, provider} rather than hardcoded, so it can
+// never go stale once this is deployed with a real Gemini/Anthropic key —
+// see loadModelBadge() below, which is the only caller. The other bullets
+// in that modal (over-refusal framing, follow-up resolution, statutory
+// vocabulary, Hindi-via-translation, not-production-scale) don't depend on
+// the provider and stay static in index.html — no reason to make those
+// dynamic too.
+function limitationsProviderText(model, provider) {
+  const modelLabel = formatModelName(model);
+  if (provider === "ollama") {
+    // The 5/11 false-refusal number was measured specifically against this
+    // local model (see README's Known limitations) — safe to state as-is
+    // only in the case that actually produced it.
+    return `<b>Local model substitution.</b> Verification and generation run on a local ${esc(modelLabel)} via Ollama, not the Claude API this was scoped for. Measured cost: a 5/11 false-refusal rate on answerable evaluation questions.`;
+  }
+  // A cloud provider is active: "local model substitution" and the 5/11
+  // figure (both specific to the Ollama dev setup) would be false here, so
+  // this names the real active model instead of repeating either claim.
+  const providerLabel = PROVIDER_LABELS[provider] || provider;
+  return `<b>Model in use.</b> Verification and generation run on ${esc(modelLabel)} via the ${esc(providerLabel)}. The false-refusal and citation-accuracy numbers elsewhere in this app were measured during development against the local Ollama model, not yet re-measured on this provider.`;
+}
+
 async function loadModelBadge() {
   const modelEl = $("#model-name");
   const corpusEl = $("#corpus-count");
+  const limitEl = $("#limit-provider");
   try {
     const res = await fetch("/api/config");
     if (!res.ok) throw new Error(String(res.status));
     const { model, provider, corpus_docs } = await res.json();
     modelEl.textContent = `${formatModelName(model)} · ${PROVIDER_LABELS[provider] || provider}`;
     corpusEl.textContent = `${corpus_docs} primary source${corpus_docs === 1 ? "" : "s"} indexed`;
+    if (limitEl) limitEl.innerHTML = limitationsProviderText(model, provider);
   } catch {
     modelEl.textContent = "Model unavailable — is the server running?";
     $("#model-note .dot-model")?.classList.add("down");
     corpusEl.textContent = "Corpus status unavailable";
+    // limitEl is deliberately left untouched on failure — index.html's
+    // static fallback text (accurate for the default local-dev setup)
+    // stays visible rather than being replaced with something guessed.
   }
 }
 
 /* ───────── splash ───────── */
+
+// Rotating micro-copy under the progress bar — decoration layered on top of
+// the real wait below, never a reason to extend it (see hideSplash, which
+// clears this on the same real-readiness condition it already used). Each
+// line names something the boot sequence plausibly is doing: the page's own
+// pipeline-shaped UI is being built, and loadModelBadge()'s /api/config call
+// (fired alongside this) is literally connecting to the model and reading
+// the corpus count — not invented copy disconnected from the actual init
+// sequence.
+const SPLASH_STATUS_LINES = [
+  "Loading the verification pipeline…",
+  "Connecting to the model…",
+  "Checking the corpus index…",
+];
+let splashStatusTimer = null;
+function startSplashStatusCycle() {
+  const statusEl = $("#splash-status");
+  // Reduced motion: skip the cycle entirely and leave the first line
+  // (already in the static HTML) showing — cycling text is motion too, even
+  // without a CSS animation driving it, so it gets the same opt-out as the
+  // staggered entrance below.
+  if (!statusEl || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  let i = 0;
+  splashStatusTimer = setInterval(() => {
+    i = (i + 1) % SPLASH_STATUS_LINES.length;
+    statusEl.textContent = SPLASH_STATUS_LINES[i];
+  }, 1000);
+}
+startSplashStatusCycle();
 
 // "Ready" = the DOM this script runs against is already built (this file is
 // a plain, non-deferred <script> at the end of <body>, so that's true the
@@ -621,6 +680,7 @@ let splashDone = false;
 function hideSplash() {
   if (splashDone) return;
   splashDone = true;
+  if (splashStatusTimer) { clearInterval(splashStatusTimer); splashStatusTimer = null; }
   const splash = $("#splash");
   if (!splash) return;
   const wait = Math.max(0, 400 - (performance.now() - splashT0));

@@ -25,7 +25,14 @@
   </span>
   <p class="splash-word"><strong>True</strong><span>Cite</span></p>
   <p class="splash-tag">Answers you can check.</p>
-  <div class="splash-bar" aria-hidden="true"><div class="splash-bar-fill"></div></div>
+  <!-- Progress bar + rotating status line are one unit for the stagger (see
+       styles.css's .splash-progress animation-delay) and for the JS cycle in
+       hideSplash()'s neighborhood — the status text is decoration on top of
+       the real /api/config wait below, never a reason to wait longer. -->
+  <div class="splash-progress">
+    <div class="splash-bar" aria-hidden="true"><div class="splash-bar-fill"></div></div>
+    <p class="splash-status" id="splash-status" aria-hidden="true">Loading the verification pipeline&hellip;</p>
+  </div>
 </div>
 
 <div class="app" id="app">
@@ -132,7 +139,12 @@
     <button class="modal-close" id="modal-close" aria-label="Close">&times;</button>
     <h3>Known limitations</h3>
     <ul>
-      <li><b>Local model substitution.</b> Verification and generation run on a local Qwen&nbsp;2.5&nbsp;7B via Ollama, not the Claude API this was scoped for. Measured cost: a 5/11 false-refusal rate on answerable evaluation questions.</li>
+      <!-- Content overwritten by JS from the real /api/config response (see
+           app.js's limitationsProviderText) — this default text is the
+           fallback shown before that fetch resolves, or if it fails. Never
+           edit the provider-specific facts here without also updating that
+           function, or the two will drift. -->
+      <li id="limit-provider"><b>Local model substitution.</b> Verification and generation run on a local Qwen&nbsp;2.5&nbsp;7B via Ollama, not the Claude API this was scoped for. Measured cost: a 5/11 false-refusal rate on answerable evaluation questions.</li>
       <li><b>Follow-up resolution is best-effort.</b> The last 3 turns are used to rewrite a follow-up (e.g. “what about for Unani?”) into a standalone question before retrieval — shown as an “Understand follow-up” step. The rewrite itself isn't verified the way answers are, so if it misreads what you meant, rephrase the question fully rather than continuing to build on it.</li>
       <li><b>Statutory vocabulary gap.</b> Terse clauses (e.g. Patents Act §3(p), which never uses the word “patent”) rank poorly against natural-language questions, so an answer may come from a secondary source explaining the same rule.</li>
       <li><b>English-only corpus.</b> Hindi retrieval is unverified — no Hindi source documents yet.</li>

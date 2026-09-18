@@ -15,10 +15,11 @@ citation is checked against the passage it claims to come from before it's
 ever shown to you.
 
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue)](https://www.python.org/)
-[![tests](https://img.shields.io/badge/tests-200%20passing-brightgreen)](tests/)
+[![tests](https://img.shields.io/badge/tests-208%20passing-brightgreen)](tests/)
+[![license](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
 <!-- TODO: replace # with the live HF Space URL once deployed -->
-🔗 **Live demo:** [coming soon](#)
+**[Live demo →](#)** <sub>(coming soon)</sub>
 
 ![TrueCite — the full verification pipeline, every step from question to cited answer](docs/assets/pipeline-poster.png)
 
@@ -50,6 +51,12 @@ same order, every time; nothing here has a planner, decides its own next
 action, or calls tools dynamically. That rigidity is what makes the pipeline
 auditable and what makes "verified" a claim that actually means something.
 
+<img src="docs/assets/app_01_landing.png" alt="TrueCite's landing screen — suggested questions, corpus and model status in the sidebar" width="720">
+
+Every reply shows its own work while it runs, then collapses to one line:
+
+<img src="docs/assets/app_03_verified.png" alt="A verified answer — collapsed to one badge, with its citation and consulted sources beneath" width="720">
+
 ## Results
 
 Measured across 96 question-runs (3 question sets × 3 seeded runs each,
@@ -69,28 +76,26 @@ of the 96 runs, no exceptions.** The measured weakness is the opposite of
 hallucination: over-refusal, concentrated in two diagnosed patterns
 (generation drafting a claim from a plausible-but-wrong passage, and a
 model-comprehension limit on relational "how does X interact with Y"
-questions). Full methodology, per-question diagnosis, and the pre-session
-baseline comparison: `docs/decisions.md`, `docs/phases.md`.
+questions). Full methodology and per-question diagnosis: `docs/decisions.md`.
 
 ## Known limitations
-
-Full list with evidence in `docs/decisions.md`; the headline items:
 
 - **Over-refusal, not hallucination**, is the dominant failure mode — see
   "Results" above.
 - **Layer 2 has twice rejected a claim that was, on a plain reading, true**
   (over-strictness rather than a false accept) — both instances quoted in
   `docs/decisions.md`.
-- **A local model (Qwen 2.5 7B via Ollama) runs verification and generation**
-  instead of the Claude API the PRD originally scoped, so quality is capped
-  by that model — real Gemini/Anthropic keys exist for deployment but
-  haven't been live-tested yet.
+- **Generation and verification quality is capped by whichever model is
+  configured.** The running app names the active model in its sidebar and
+  "Known limitations" panel, so this is never stale regardless of which
+  provider is actually deployed.
 - **A relevance-filter stage is built and tested but off by default** — the
-  A/B measurement that justified leaving it off is now known to have been
-  confounded by an unrelated prompt-truncation bug, so its actual effect is
-  honestly unmeasured, not confirmed negative.
-- **A provider quota/rate-limit failure degrades gracefully** rather than
-  crashing the pipeline — see `docs/decisions.md` for the fallback behavior.
+  A/B measurement that justified leaving it off was later found to be
+  confounded by an unrelated bug, so its actual effect is honestly
+  unmeasured, not confirmed negative.
+- **A provider quota/rate-limit or connection failure degrades gracefully**
+  — a distinct, honest "server's busy" message, never a raw error or a
+  fabricated answer. See `docs/decisions.md` for the fallback behavior.
 
 ## Tech stack
 
@@ -128,7 +133,7 @@ LLM_PROVIDER=anthropic ANTHROPIC_API_KEY=... uvicorn src.api:app --port 8000
 index from scratch (~35 min on modest hardware) — otherwise skip them.
 
 ```bash
-python -m pytest tests/    # 200 tests, all fast — live model calls are mocked
+python -m pytest tests/    # 208 tests, all fast — live model calls are mocked
 ```
 
 ## Deploying
@@ -139,19 +144,14 @@ there's no re-embedding step at build time). Set `LLM_PROVIDER`,
 `GEMINI_API_KEY`, and/or `ANTHROPIC_API_KEY` through the Space's own Secrets
 UI — none of them are committed or baked into the image.
 
-## Project docs
-
-- `docs/PRD.md` — original requirements (kept as originally written).
-- `docs/architecture.md` — current actual architecture, data flow, folder structure.
-- `docs/decisions.md` — every non-obvious technical choice, with the evidence behind it.
-- `docs/phases.md` — living build log, phase by phase, with gate criteria and results.
-- `docs/eval_questions.md` — the evaluation question set.
-
 ## License
 
-No LICENSE file is currently included in this repository.
+[MIT](LICENSE) — see `docs/` for the full technical write-up (architecture,
+every non-obvious decision with its evidence, the build log, and the
+evaluation question set), and `corpus/manifest.md` for source provenance.
 
 ---
 
-Originally built as **IP-SAKTI Sahayak** for SIH26045 (Smart India
-Hackathon, Ministry of Ayush); renamed for its public/portfolio release.
+Built by [Sumanth Mamidi](https://github.com/SumanthMamidi-MNS). Originally
+developed as **IP-SAKTI Sahayak** for SIH26045 (Smart India Hackathon,
+Ministry of Ayush); renamed for its public release.
