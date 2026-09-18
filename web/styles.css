@@ -86,9 +86,15 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 }
 .mark svg { width: 18px; height: 18px; stroke: var(--gold-400); stroke-linecap: round; stroke-linejoin: round; }
 .mark-check { stroke: var(--green); stroke-width: 2; }
-.brand-text { display: flex; flex-direction: column; line-height: 1.15; }
-.brand-text strong { font-family: var(--font-display); font-size: .98rem; font-weight: 600; }
-.brand-text span { font-size: .68rem; letter-spacing: .14em; text-transform: uppercase; color: var(--text-mute); }
+/* Single-line wordmark: "TrueCite" reads as one compound word, unlike the
+   old "IP-SAKTI" (acronym) / "Sahayak" (description) two-line lockup this
+   was originally built for — stacking it onto two lines split the word in
+   an ugly, unreadable way. Both halves now sit on one baseline; the weight
+   contrast (bold "True" / regular "Cite") is the only thing that survived
+   from the old two-tone treatment. */
+.brand-text { display: flex; flex-direction: row; align-items: baseline; line-height: 1.15; }
+.brand-text strong { font-family: var(--font-display); font-size: .98rem; font-weight: 700; }
+.brand-text span { font-family: var(--font-display); font-size: .98rem; font-weight: 500; color: var(--text); }
 
 .new-chat {
   display: flex; align-items: center; gap: .55rem;

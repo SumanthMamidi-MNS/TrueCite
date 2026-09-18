@@ -145,9 +145,12 @@
   footer p{ font-size:13.5px; color:var(--ink-faint); margin:4px 0; }
   footer p b{ color:var(--ink-soft); }
 
-  .trust-line{ text-align:center; background:var(--sage-soft); border:1.5px solid var(--sage-line); border-radius:12px;
-               padding:16px 24px; margin:36px 0 30px; font-size:15px; color:var(--ink); }
-  .trust-line b{ font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; color:var(--sage); font-size:17px; }
+  .stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line); border:1.5px solid var(--line);
+          border-radius:14px; overflow:hidden; margin:36px 0 30px; }
+  .stat{ background:var(--panel); padding:24px 18px; text-align:center; }
+  .stat .n{ font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; font-weight:700; font-size:42px; color:var(--sage); line-height:1; }
+  .stat .n small{ font-size:22px; color:var(--ink-soft); font-weight:500; }
+  .stat .l{ font-size:13.5px; color:var(--ink-soft); margin-top:10px; line-height:1.4; }
 </style>
 </head>
 <body>
@@ -208,7 +211,7 @@
       <div class="connector"></div>
 
       <div class="fnode brass">
-        <div class="t">Authority ordering</div>
+        <div class="t">Layer 3 &mdash; authority ordering</div>
         <div class="s">among the confident passages: Act &gt; Guideline &gt; Informational, then most recent first</div>
       </div>
       <div class="connector"></div>
@@ -253,8 +256,10 @@
     </div>
   </section>
 
-  <div class="trust-line">
-    <b>0/5</b> false answers &middot; <b>5/5</b> correct refusals &middot; measured across <b>96</b> test runs, including two question sets frozen into git before ever being tested
+  <div class="stats">
+    <div class="stat"><div class="n">0<small>/5</small></div><div class="l">false answers &mdash; every measured run</div></div>
+    <div class="stat"><div class="n">5<small>/5</small></div><div class="l">unanswerable questions correctly refused, every run</div></div>
+    <div class="stat"><div class="n">96</div><div class="l">test runs &mdash; 2 question sets frozen into git before ever being tested</div></div>
   </div>
 
   <div class="legend">
