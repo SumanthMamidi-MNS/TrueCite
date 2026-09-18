@@ -9,6 +9,7 @@
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
+const splashT0 = performance.now();
 const thread = $("#thread");
 const empty = $("#empty");
 const composer = $("#composer");
@@ -607,6 +608,32 @@ async function loadModelBadge() {
   }
 }
 
+/* ───────── splash ───────── */
+
+// "Ready" = the DOM this script runs against is already built (this file is
+// a plain, non-deferred <script> at the end of <body>, so that's true the
+// moment this runs) AND the first real network round-trip — the same
+// /api/config fetch loadModelBadge() already needs for the sidebar badges —
+// has settled, success or failure. A floor of 400ms keeps it from flashing
+// uselessly when the server's already warm; it never waits longer than that
+// on its own, only until the real fetch resolves.
+let splashDone = false;
+function hideSplash() {
+  if (splashDone) return;
+  splashDone = true;
+  const splash = $("#splash");
+  if (!splash) return;
+  const wait = Math.max(0, 400 - (performance.now() - splashT0));
+  setTimeout(() => {
+    splash.classList.add("hide");
+    splash.addEventListener("transitionend", () => splash.remove(), { once: true });
+  }, wait);
+}
+// Safety net only — if the backend is up but never answers (not the
+// "resolves for real" condition itself, just a backstop so a broken
+// deployment can't strand a visitor behind the splash indefinitely).
+setTimeout(hideSplash, 20000);
+
 /* ───────── wiring ───────── */
 
 function autoGrow() {
@@ -647,13 +674,21 @@ $("#limits-link").addEventListener("click", () => (modal.hidden = false));
 $("#modal-close").addEventListener("click", () => (modal.hidden = true));
 modal.addEventListener("click", (e) => { if (e.target === modal) modal.hidden = true; });
 
+const aboutModal = $("#about-modal");
+$("#about-link").addEventListener("click", () => (aboutModal.hidden = false));
+$("#about-modal-close").addEventListener("click", () => (aboutModal.hidden = true));
+aboutModal.addEventListener("click", (e) => { if (e.target === aboutModal) aboutModal.hidden = true; });
+
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !modal.hidden) modal.hidden = true;
+  if (e.key === "Escape") {
+    if (!modal.hidden) modal.hidden = true;
+    if (!aboutModal.hidden) aboutModal.hidden = true;
+  }
   if ((e.key === "/" || (e.key === "k" && (e.metaKey || e.ctrlKey))) && document.activeElement !== input) {
     e.preventDefault(); input.focus();
   }
 });
 
 renderHistory();
-loadModelBadge();
+loadModelBadge().finally(hideSplash);
 input.focus();

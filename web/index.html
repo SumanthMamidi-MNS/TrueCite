@@ -11,6 +11,23 @@
 </head>
 <body>
 
+<!-- ───────── splash ───────── -->
+<!-- Covers boot: the page's own JS initializing plus the first real
+     /api/config check, so first-load visitors never see a bare shell while
+     the server's embedding stack comes up. Removed for real once ready —
+     see hideSplash() in app.js, not a fixed timer. -->
+<div class="splash" id="splash" role="status" aria-live="polite">
+  <span class="splash-mark" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6">
+      <path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z" />
+      <path d="m8.2 12.1 2.6 2.7 5-5.6" class="mark-check" />
+    </svg>
+  </span>
+  <p class="splash-word"><strong>True</strong><span>Cite</span></p>
+  <p class="splash-tag">Answers you can check.</p>
+  <div class="splash-bar" aria-hidden="true"><div class="splash-bar-fill"></div></div>
+</div>
+
 <div class="app" id="app">
 
   <!-- ───────── sidebar ───────── -->
@@ -42,6 +59,7 @@
       <div class="corpus-note model-note" id="model-note" title="Set via the OLLAMA_MODEL environment variable">
         <span class="dot dot-model"></span><span id="model-name">Checking model…</span>
       </div>
+      <button class="link-btn" id="about-link">About TrueCite</button>
       <button class="link-btn" id="limits-link">Known limitations</button>
     </div>
   </aside>
@@ -121,6 +139,27 @@
       <li><b>Not production-scale.</b> Single user, local only.</li>
     </ul>
     <p class="modal-foot">Unanswerable questions: 5/5 correctly refused, 0 false answers.</p>
+  </div>
+</div>
+
+<!-- ───────── about modal ───────── -->
+<div class="modal" id="about-modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="About TrueCite">
+    <button class="modal-close" id="about-modal-close" aria-label="Close">&times;</button>
+    <h3>About TrueCite</h3>
+    <div class="about-body">
+      <p class="about-lede">TrueCite is a source-cited assistant for Ayurveda IP and regulatory
+        guidance — every claim it makes is checked against the passage it cites before it's
+        ever shown to you.</p>
+      <p>It refuses rather than guesses, and that's measured, not just claimed: across 96 test
+        runs spanning three question sets — two of them committed to git before ever being
+        tested, specifically to catch overfitting — unanswerable questions were correctly
+        refused 5/5 times, with 0/5 false answers.</p>
+      <p><b>How:</b> a fixed-sequence, three-layer pipeline — a confidence gate, per-claim
+        verification, and authority-ranked citation — not a multi-agent system.</p>
+      <!-- TODO: set to the actual GitHub repo URL -->
+      <a class="about-link-out" id="about-repo-link" href="#" target="_blank" rel="noopener">Full technical write&#8209;up on GitHub &rarr;</a>
+    </div>
   </div>
 </div>
 

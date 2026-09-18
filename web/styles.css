@@ -65,6 +65,45 @@ h1,h2,h3 { margin: 0; font-weight: 600; }
 p { margin: 0; }
 button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; }
 
+/* ══════════ splash ══════════ */
+/* First-load cover: page JS booting plus the first real /api/config check.
+   Resolves on an actual condition (see hideSplash() in app.js) — at least
+   400ms so it doesn't flash uselessly on an already-warm server, AND until
+   that request settles — never a bare fixed-duration fade. */
+.splash {
+  position: fixed; inset: 0; z-index: 100;
+  /* flex, not grid: with no explicit grid-template, "display:grid" gives
+     each direct child its own implicit auto-sized row, so "place-items:
+     center" centers every child independently within its own oversized
+     row instead of clustering them as one group — the mark, wordmark,
+     tagline and bar ended up scattered across the full viewport height
+     instead of sitting together. Flex keeps them hugging each other with
+     just `gap` between, centered as a single unit. */
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .6rem;
+  background: var(--ink-900); text-align: center;
+  opacity: 1; transition: opacity .4s var(--ease);
+}
+.splash.hide { opacity: 0; pointer-events: none; }
+.splash-mark {
+  display: grid; place-items: center; width: 52px; height: 52px; border-radius: 15px;
+  background: linear-gradient(145deg, rgba(242,197,124,.16), rgba(224,163,85,.04));
+  border: 1px solid rgba(242,197,124,.28);
+  margin-bottom: .3rem;
+}
+.splash-mark svg { width: 30px; height: 30px; stroke: var(--gold-400); stroke-linecap: round; stroke-linejoin: round; }
+.splash-mark .mark-check { stroke: var(--green); stroke-width: 2; }
+.splash-word { font-family: var(--font-display); font-size: 1.4rem; line-height: 1.15; }
+.splash-word strong { font-weight: 700; color: var(--text); }
+.splash-word span { font-weight: 500; color: var(--text); }
+.splash-tag { font-size: .82rem; color: var(--text-mute); }
+.splash-bar { width: 140px; height: 3px; margin-top: .5rem; border-radius: 999px; background: rgba(255,255,255,.07); overflow: hidden; }
+.splash-bar-fill {
+  width: 40%; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold-500), var(--gold-400));
+  animation: splashSlide 1.3s ease-in-out infinite;
+}
+@keyframes splashSlide { 0% { transform: translateX(-120%); } 100% { transform: translateX(350%); } }
+
 /* ══════════ app shell ══════════ */
 
 .app { display: grid; grid-template-columns: var(--sidebar-w) minmax(0,1fr); height: 100dvh; }
@@ -444,6 +483,16 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 .modal-foot { margin-top: 1rem; padding-top: .85rem; border-top: 1px solid var(--line); font-family: var(--font-mono); font-size: .76rem; color: var(--green); }
 .modal-close { position: absolute; top: .6rem; right: .8rem; font-size: 1.55rem; line-height: 1; color: var(--text-mute); }
 .modal-close:hover { color: var(--text); }
+
+.about-body { display: grid; gap: .75rem; }
+.about-body p { color: var(--text-dim); font-size: .88rem; line-height: 1.6; }
+.about-body .about-lede { color: var(--text); font-size: .92rem; }
+.about-body b { color: var(--text); }
+.about-link-out {
+  display: inline-flex; align-items: center; gap: .35rem; width: max-content;
+  font-size: .85rem; color: var(--gold-400); text-decoration: underline; text-underline-offset: 3px;
+}
+.about-link-out:hover { color: var(--gold-500); }
 
 /* ══════════ responsive ══════════ */
 
