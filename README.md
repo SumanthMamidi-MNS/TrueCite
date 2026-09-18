@@ -152,6 +152,6 @@ evaluation question set), and `corpus/manifest.md` for source provenance.
 
 ---
 
-Built by [Sumanth Mamidi](https://github.com/SumanthMamidi-MNS). Originally
+Built by [Sumanth Mamidi](https://github.com/SumanthMamidi-MNS) — [source](https://github.com/SumanthMamidi-MNS/TrueCite). Originally
 developed as **IP-SAKTI Sahayak** for SIH26045 (Smart India Hackathon,
 Ministry of Ayush); renamed for its public release.
