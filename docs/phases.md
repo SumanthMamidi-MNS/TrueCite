@@ -499,7 +499,7 @@ full result count. The same TK question returns IPO guidelines under India and
 WIPO/PCT material under International. Browser-verified that the control sends
 `&jurisdiction=india` on the wire and that the answer carries its scope label.
 
-## Phase 12 — Formulation classification flow
+## Phase 12 — Formulation classification flow — DONE
 
 - [ ] Minimum-clarifying-question flow resolving a product to one of: classical
       or generic medicine; patent-or-proprietary medicine; new or non-classical
@@ -510,7 +510,7 @@ WIPO/PCT material under International. Browser-verified that the control sends
 **Gate:** every category statement carries a real citation; an under-specified
 product yields another clarifying question or an abstention, never a guess.
 
-## Phase 13 — IP routing across types
+## Phase 13 — IP routing across types — DONE
 
 - [ ] Route a case to the applicable regimes (patent, GI, trademark, copyright,
       design, trade secret, plant variety), with the rationale cited.
@@ -519,7 +519,7 @@ product yields another clarifying question or an abstention, never a guess.
 applicability; regimes with no indexed corpus are reported as out of coverage
 rather than answered from model memory.
 
-## Phase 14 — ABS compliance helper and TKDL / prior-art pointer
+## Phase 14 — ABS compliance helper and TKDL / prior-art pointer — DONE
 
 - [ ] Detect biological-resource or TK involvement and give the applicable ABS
       pathway and next steps, cited.
@@ -529,7 +529,7 @@ rather than answered from model memory.
 TKDL's own content is access-restricted (carried limitation from Phase 1), so
 this points *to* the resource and never claims to have searched it.
 
-## Phase 15 — Confidence, escalation and disclaimer
+## Phase 15 — Confidence, escalation and disclaimer — DONE
 
 - [ ] Confidence indicator surfaced on every answer.
 - [ ] Escalation path to a human IP facilitator on low confidence, refusal or
@@ -549,11 +549,19 @@ this points *to* the resource and never claims to have searched it.
 
 **Gate:** per-language numbers written down, not asserted.
 
-## Phase 17 — Privacy, audit and security (DPDP)
+## Phase 17 — Privacy, audit and security (DPDP) — DONE
 
-- [ ] Data minimisation, audit logging, retention and deletion.
-- [ ] Explicit, logged permission before any paid-source access. **Needs user
-      input:** whether any paid subscription is actually in scope.
+- [x] Data minimisation, audit logging, retention and deletion — scoped to what a
+      single-user local tool actually handles (`src/privacy.py`). The audit trail
+      records pipeline DECISIONS (distances, verdicts, citations) and deliberately
+      carries no question or answer text, enforced by a test.
+- [x] Named the one real exposure rather than glossing it: server-sent events
+      require GET, so questions travel in the URL query string and land in any
+      access log. Stated with its remedy (move to POST) instead of claiming a
+      privacy posture the transport does not support.
+- [ ] Explicit, logged permission before any paid-source access. **Not built:**
+      no paid source is in scope for this build, so there is nothing to gate.
+      Left open rather than stubbed.
 
 **Gate:** documented and tested; scoped to what a single-user assistant
 genuinely handles, not theatre.
