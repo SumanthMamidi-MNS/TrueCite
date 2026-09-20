@@ -30,10 +30,12 @@ import os
 
 import llm_client
 from authority import get_authority
+from escalation import STANDING_DISCLAIMER, assess
 from citation import format_citation, resolve_authority
 from confidence_gate import CONFIDENCE_THRESHOLD, passes_confidence_gate
 from coverage import assess_coverage
 from hybrid_retrieval import _in_jurisdiction, retrieve_hybrid
+from routing import prior_art_pointer, route
 from relevance import apply_relevance, judge_relevance
 from retrieval import retrieve as retrieve_vector
 from verification import verify_claim
@@ -286,6 +288,38 @@ def _describe_source(hit: dict, index: int) -> dict:
     }
 
 
+
+def _advisory_event(query: str, *, refused: bool, best_distance: float | None,
+                    rejected_claims: int = 0) -> dict:
+    """Everything the pipeline can say ABOUT an answer, as one terminal event.
+
+    Kept out of the answer text deliberately. The disclaimer, the confidence
+    label and the escalation offer are not claims drawn from a source, so
+    folding them into the answer would put unverifiable sentences next to
+    verified ones and ask Layer 2 to check them against a passage. Here they
+    are unambiguously commentary.
+    """
+    routed = route(query)
+    out_of_coverage = [e["regime"] for e in routed["out_of_coverage"]]
+    advice = assess(
+        refused=refused,
+        best_distance=best_distance,
+        rejected_claims=rejected_claims,
+        out_of_coverage_regimes=out_of_coverage,
+    )
+    return {
+        "type": "advisory",
+        "disclaimer": STANDING_DISCLAIMER,
+        "confidence": advice["confidence"],
+        "escalate": advice["escalate"],
+        "escalation_reasons": advice["reasons"],
+        "escalation_guidance": advice["guidance"],
+        "regimes_in_coverage": [e["regime"] for e in routed["in_coverage"]],
+        "regimes_out_of_coverage": out_of_coverage,
+        "prior_art_pointer": prior_art_pointer(query),
+    }
+
+
 def answer_query_streaming(
     query: str,
     top_k: int = 8,
@@ -376,6 +410,11 @@ def answer_query_streaming(
 
     if not hits:
         yield {"type": "refused", "refusal_stage": "gate", "result": _refusal("gate")}
+        # The advisory matters MOST here, not least: the user has just been
+        # told this tool cannot answer, so the standing disclaimer and the
+        # pointer to a human are the only useful things left to give them.
+        # Missing it on this path was a real gap — the other two exits had it.
+        yield _advisory_event(query, refused=True, best_distance=diag.get("best_distance"))
         return
 
     if relevance_filter:
@@ -509,6 +548,9 @@ def answer_query_streaming(
         result = _refusal("verification")
         result["discarded"] = discarded_claims
         yield {"type": "refused", "refusal_stage": "verification", "result": result}
+        yield _advisory_event(query, refused=True,
+                              best_distance=diag.get("best_distance"),
+                              rejected_claims=len(discarded_claims))
         return
 
     result = {
@@ -557,6 +599,12 @@ def answer_query_streaming(
             result["coverage"] = None
             yield {"type": "stage", "stage": "coverage", "status": "done", "meta": {"available": False}}
 
+    yield _advisory_event(
+        query,
+        refused=False,
+        best_distance=diag.get("best_distance"),
+        rejected_claims=len(result.get("discarded") or []),
+    )
     yield {"type": "complete", "result": result}
 
 
