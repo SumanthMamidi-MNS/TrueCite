@@ -680,3 +680,49 @@ def chunk_document(doc_id: str, pages: list[str], body_start_anchor: str | None 
     chunks = list(front_matter_chunks)
     chunks.extend(_chunk_region(doc_id, body_text, anchor_pos, offsets))
     return chunks
+
+
+# Build-time ceiling, deliberately NOT the same thing as MAX_CHUNK_CHARS
+# (3000) above: that one is the splitting target the chunker aims for, while
+# this is the point past which a chunk proves structure detection failed
+# outright. The largest chunk in the clean 7-document corpus is 17,978 chars
+# (WIPO toolkit), so this sits just above the real-world maximum. Not a style
+# rule: a 79,710-char chunk once silently overflowed the local model's context
+# window and produced a truncated answer with no error (docs/memory.md,
+# 2026-09-15).
+MAX_INDEXABLE_CHUNK_CHARS = 20_000
+
+
+def validate_chunks(doc_id: str, chunks: list) -> None:
+    """Raise if chunking produced output that would corrupt the index.
+
+    Both failures here are silent ones, which is why they are checked at build
+    time rather than trusted. Duplicate chunk_ids are the worse of the two:
+    the vector store upserts by id, so duplicates do not error — they
+    overwrite, and the corpus quietly ends up smaller than the chunk count
+    says. A 635-page Act+Rules+Schedules compilation produced 1063 chunks
+    under only 164 distinct ids, which would have discarded 899 of them
+    without a word.
+    """
+    seen: dict[str, int] = {}
+    for c in chunks:
+        seen[c.chunk_id] = seen.get(c.chunk_id, 0) + 1
+    duplicates = {cid: n for cid, n in seen.items() if n > 1}
+    if duplicates:
+        worst = sorted(duplicates.items(), key=lambda kv: -kv[1])[:5]
+        raise ValueError(
+            f"{doc_id}: {len(duplicates)} duplicate chunk_id(s) would silently "
+            f"discard {sum(n - 1 for n in duplicates.values())} of {len(chunks)} "
+            f"chunks at index time. Worst: {worst}. The document's numbering "
+            f"most likely restarts (Act vs Rules vs Schedules) and needs "
+            f"splitting into separate doc_ids, or a chunker that namespaces by part."
+        )
+    oversized = [c for c in chunks if c.char_count > MAX_INDEXABLE_CHUNK_CHARS]
+    if oversized:
+        worst = sorted(oversized, key=lambda c: -c.char_count)[:5]
+        raise ValueError(
+            f"{doc_id}: {len(oversized)} chunk(s) exceed MAX_INDEXABLE_CHUNK_CHARS "
+            f"({MAX_INDEXABLE_CHUNK_CHARS}), meaning structure detection failed and whole "
+            f"page ranges were swallowed. Worst: "
+            + ", ".join(f"{c.chunk_id} ({c.char_count} chars, p{c.page_start}-{c.page_end})" for c in worst)
+        )

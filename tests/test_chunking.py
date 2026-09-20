@@ -3,6 +3,10 @@ manual chunk-quality review (see docs/decisions.md for the incident each
 one corresponds to). Synthetic inputs, not the real corpus PDFs, so these
 stay fast and self-contained.
 """
+from types import SimpleNamespace
+
+import pytest
+
 from chunking import MAX_CHUNK_CHARS, MIN_SECTION_BODY_CHARS, _split_section_body, chunk_document
 
 
@@ -292,3 +296,38 @@ def test_midsentence_lettered_reference_does_not_create_duplicate_clause():
     chunks = chunk_document("test_act", [page], body_start_anchor="BE it enacted")
     clause_b_chunks = [c for c in chunks if c.section_number == "2(b)"]
     assert len(clause_b_chunks) == 1, f"expected exactly one clause (b), got {len(clause_b_chunks)}"
+
+
+def test_validate_chunks_accepts_clean_output():
+    from chunking import validate_chunks
+    chunks = [
+        SimpleNamespace(chunk_id="d::sec-1", char_count=500, page_start=1, page_end=1),
+        SimpleNamespace(chunk_id="d::sec-2", char_count=900, page_start=1, page_end=2),
+    ]
+    validate_chunks("d", chunks)  # must not raise
+
+
+def test_validate_chunks_rejects_duplicate_ids():
+    # The dangerous failure: the vector store upserts by id, so duplicates
+    # overwrite rather than error, and the corpus silently shrinks.
+    from chunking import validate_chunks
+    chunks = [
+        SimpleNamespace(chunk_id="d::sec-451-sub-2", char_count=80, page_start=3, page_end=3),
+        SimpleNamespace(chunk_id="d::sec-451-sub-2", char_count=59, page_start=9, page_end=9),
+    ]
+    with pytest.raises(ValueError, match="duplicate chunk_id"):
+        validate_chunks("d", chunks)
+
+
+def test_validate_chunks_rejects_oversized_chunk():
+    from chunking import MAX_INDEXABLE_CHUNK_CHARS, validate_chunks
+    chunks = [
+        SimpleNamespace(
+            chunk_id="d::sec-451-sub-6",
+            char_count=MAX_INDEXABLE_CHUNK_CHARS + 1,
+            page_start=203,
+            page_end=264,
+        )
+    ]
+    with pytest.raises(ValueError, match="MAX_INDEXABLE_CHUNK_CHARS"):
+        validate_chunks("d", chunks)

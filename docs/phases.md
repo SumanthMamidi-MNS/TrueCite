@@ -407,11 +407,132 @@ Sequential, gated phases per PRD §9 — no fixed schedule. Each phase gates the
       `docs/decisions.md` (2026-09-17 entries) and `README.md`'s "Known limitations"/
       "Evaluation" sections.
 
-This closes out the pre-pitch technical validation work. No further phase is
-scheduled; remaining open items (provider live-testing against a real key,
-relevance-filter re-measurement post-num_ctx-fix, the synthesis/section-
-misattribution limitations) are documented in README.md's "Known limitations"
-as accepted, disclosed gaps rather than carried as a numbered phase.
+This closed out the pre-pitch technical validation work: a citation-grounded
+retrieval MVP, which is the first stage the problem statement itself calls for
+("the build can be staged — a citation-grounded retrieval MVP first").
+
+---
+
+# Phases 10-18 — domain intelligence
+
+Derived from the full problem statement (`docs/PRD.md`, 2026-09-20 revision),
+which is substantially broader than the scoped restatement phases 1-9 were
+built against. Phases 1-9 built the *engine*: retrieval, three-layer
+verification, citation, evaluation. Phases 10-18 build the *domain*: the
+formulation-classification flow, IP-type routing, jurisdiction separation, ABS
+and TK helpers, and the guardrail/privacy obligations the statement names.
+
+**Sequencing principle:** the corpus gates everything. Routing a user to the
+Trade Marks regime with no Trade Marks Act indexed would emit ungrounded
+guidance — precisely the failure this project exists to prevent. So corpus and
+its metadata come first, and every domain feature after it must cite real
+retrieved provisions or abstain.
+
+## Phase 10 — Corpus & metadata foundation — IN PROGRESS
+
+Source, verify and index the instruments the problem statement names, and add
+the metadata later phases route on.
+
+- [ ] National IP: Patents Rules 2024; GI Act 1999; Trade Marks Act 1999;
+      Designs Act 2000; Copyright Act 1957; Protection of Plant Varieties and
+      Farmers' Rights Act 2001.
+- [ ] National ABS: Biological Diversity (Amendment) Act 2023 and the 2024
+      Rules (the 2002 base Act is already indexed).
+- [ ] National drug/advertising/food: Drugs and Cosmetics Act 1940 (with the
+      Ayurvedic/Siddha/Unani provisions and First Schedule), Drugs and Magic
+      Remedies (Objectionable Advertisements) Act 1954, FSSAI Ayurveda Aahar
+      regulations.
+- [ ] International: TRIPS; Convention on Biological Diversity; Nagoya
+      Protocol; PCT; Madrid Protocol; Hague Agreement; Budapest Treaty. (The
+      WIPO GRATK Treaty 2024 is already indexed.)
+- [ ] Extend `authority.py` with `jurisdiction` (india | international) and
+      `regime` (patent | gi | trademark | design | copyright | pvp |
+      trade-secret | abs | drug-regulatory | advertising | food-cosmetic) on
+      every entry, old and new, plus effective-date/version tracking for the
+      amended instruments.
+- [ ] Re-chunk and re-index; update `corpus/manifest.md` with provenance and
+      retrieval date for each source.
+
+**Gate:** a hand-checked retrieval question per regime returns the correct
+statute and section. Any source that can only be obtained as a poor OCR scan is
+rejected and recorded as rejected, not silently degraded — as was done for the
+Patents Rules 2003 base text in Phase 1b.
+
+## Phase 11 — Jurisdiction switch
+
+- [ ] Filter retrieval by jurisdiction; India and international answer-sets
+      kept visibly separate, never merged into one answer.
+- [ ] UI toggle, with the active jurisdiction stated on every answer.
+
+**Gate:** paired India/international questions return disjoint, correct source
+sets; no answer cites across the boundary without saying so.
+
+## Phase 12 — Formulation classification flow
+
+- [ ] Minimum-clarifying-question flow resolving a product to one of: classical
+      or generic medicine; patent-or-proprietary medicine; new or non-classical
+      drug; phytopharmaceutical; Ayurveda-Aahar / nutraceutical; cosmetic.
+- [ ] Per category, state the regulatory requirements and the IP and ABS
+      posture that follows, each grounded in a retrieved provision.
+
+**Gate:** every category statement carries a real citation; an under-specified
+product yields another clarifying question or an abstention, never a guess.
+
+## Phase 13 — IP routing across types
+
+- [ ] Route a case to the applicable regimes (patent, GI, trademark, copyright,
+      design, trade secret, plant variety), with the rationale cited.
+
+**Gate:** each routed regime cites the provision establishing its
+applicability; regimes with no indexed corpus are reported as out of coverage
+rather than answered from model memory.
+
+## Phase 14 — ABS compliance helper and TKDL / prior-art pointer
+
+- [ ] Detect biological-resource or TK involvement and give the applicable ABS
+      pathway and next steps, cited.
+- [ ] TKDL / prior-art pointers to real, reachable registries.
+
+**Gate:** an adversarial test confirms it never fabricates a TKDL record.
+TKDL's own content is access-restricted (carried limitation from Phase 1), so
+this points *to* the resource and never claims to have searched it.
+
+## Phase 15 — Confidence, escalation and disclaimer
+
+- [ ] Confidence indicator surfaced on every answer.
+- [ ] Escalation path to a human IP facilitator on low confidence, refusal or
+      conflicting authority.
+- [ ] Standing "information, not legal advice" disclaimer.
+
+**Gate:** all three present on every answer path, refusals included.
+
+## Phase 16 — Multilingual delivery
+
+- [x] Cross-lingual retrieval measured with parallel question pairs; BM25
+      no-match abstention fixed (2026-09-20).
+- [ ] Hindi query path end-to-end, not just answer translation.
+- [ ] Assess Bhashini for national-language delivery. **Needs user input:**
+      Bhashini API access requires registration and credentials.
+- [ ] Measure multilingual quality per language rather than assuming parity.
+
+**Gate:** per-language numbers written down, not asserted.
+
+## Phase 17 — Privacy, audit and security (DPDP)
+
+- [ ] Data minimisation, audit logging, retention and deletion.
+- [ ] Explicit, logged permission before any paid-source access. **Needs user
+      input:** whether any paid subscription is actually in scope.
+
+**Gate:** documented and tested; scoped to what a single-user assistant
+genuinely handles, not theatre.
+
+## Phase 18 — Full evaluation
+
+- [ ] Extend the eval set across the new regimes and the classification flow.
+- [ ] Measure answer accuracy, citation correctness, safe abstention and
+      multilingual quality; hold out a set before running it, as in Phase 9.
+
+**Gate:** numbers exist and are written down.
 
 ## Notes
 - No fixed calendar — move to the next phase only when the current one is verified working.

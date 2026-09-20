@@ -6,7 +6,7 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
-from chunking import chunk_document
+from chunking import chunk_document, validate_chunks
 from parsing import extract_pages
 
 CORPUS_RAW = Path(__file__).resolve().parent.parent / "corpus" / "raw"
@@ -40,6 +40,7 @@ def main():
         path = CORPUS_RAW / filename
         pages = extract_pages(path)
         chunks = chunk_document(doc_id, pages, body_start_anchor=anchor)
+        validate_chunks(doc_id, chunks)
 
         out_path = CORPUS_PROCESSED / f"{doc_id}.json"
         out_path.write_text(
