@@ -60,24 +60,35 @@ CASES = [
 def run_one(regime: str, question: str, expected: str | None) -> dict:
     t0 = time.time()
     refused, refusal_stage, answer, citations, advisory = False, None, "", [], None
+    # source_index -> doc_id, from the `sources` event. Citations are rendered
+    # with each document's short_name ("GI of Goods Act, 1999"), which shares
+    # no words with its doc_id, so matching doc_id text against the citation
+    # string produces false negatives. Map through the index instead.
+    sources_by_index: dict[int, str] = {}
+    cited_doc_ids: list[str] = []
     try:
         for ev in answer_query_streaming(question):
-            if ev["type"] == "refused":
+            if ev["type"] == "sources":
+                for i, srcs in enumerate(ev["sources"], start=1):
+                    sources_by_index[srcs.get("index", i)] = srcs.get("doc_id", "")
+            elif ev["type"] == "refused":
                 refused, refusal_stage = True, ev.get("refusal_stage")
             elif ev["type"] == "advisory":
                 advisory = ev
             elif ev["type"] == "complete":
                 answer = ev["result"].get("answer", "")
                 citations = ev["result"].get("citations", []) or []
+                cited_doc_ids = [
+                    sources_by_index.get(c.get("source_index"), "")
+                    for c in ev["result"].get("claims", [])
+                ]
             elif ev["type"] == "provider_unavailable":
                 return {"regime": regime, "question": question, "error": ev["message"]}
     except Exception as exc:
         return {"regime": regime, "question": question,
                 "error": f"{type(exc).__name__}: {exc}"}
 
-    cited_expected = bool(expected) and any(
-        expected.replace("_", " ").split()[0].lower() in c.lower() for c in citations
-    )
+    cited_expected = bool(expected) and expected in cited_doc_ids
     should_refuse = expected is None
     return {
         "regime": regime,
@@ -89,6 +100,7 @@ def run_one(regime: str, question: str, expected: str | None) -> dict:
         "false_answer": should_refuse and not refused,
         "cited_expected": cited_expected,
         "citations": citations,
+        "cited_doc_ids": cited_doc_ids,
         "answer": answer[:300],
         "confidence": (advisory or {}).get("confidence"),
         "escalated": (advisory or {}).get("escalate"),

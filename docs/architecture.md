@@ -122,7 +122,61 @@ narrowing of the PRD's literal ask, not a secret one — in exchange for zero
 new hallucination risk (translating settled text can only be mistranslated,
 not fabricated). A machine-translation disclaimer is shown in the UI itself.
 
-## Corpus (7 documents as of 2026-09-13, see corpus/manifest.md)
+
+## Domain layer (phases 10-18)
+
+Phases 1-9 built the engine: retrieval, three-layer verification, citation.
+Phases 10-18 built the domain the problem statement actually describes. Every
+module here is deterministic where the decision is deterministic — the
+pipeline is a fixed sequence, not an agent, and these preserve that.
+
+- **`authority.py`** — now carries three facets the rest of the domain layer
+  routes on: `jurisdiction` (india | international), `regimes` (a list; TRIPS
+  spans six), and `amendment_currency`. Two authority levels were inserted:
+  Rules (binding subordinate legislation, below its parent Act) and Treaty
+  (below both for an Indian question, since India is dualist). Ranks are now
+  Act=5, Rules=4, Treaty=3, Guideline=2, Informational=1.
+- **`hybrid_retrieval.py`** — takes an optional `jurisdiction`. Resolved per
+  doc_id from `authority.py` at query time, never stored in vector metadata,
+  so correcting a document's jurisdiction never forces a re-embed. Filtering
+  happens before fusion over an enlarged fetch, so a scoped query still
+  returns a full `top_k`. A document whose jurisdiction cannot be resolved is
+  EXCLUDED from a scoped query — failing closed is the only reading
+  consistent with the problem statement's "never conflated".
+- **`classification.py`** — the formulation flow. A deterministic decision
+  tree over the six categories, asking only the questions that still
+  discriminate (a cosmetic is classified after one question). `classify`
+  returns None rather than guessing when the answers do not decide. Three of
+  the six categories abstain STRUCTURALLY, before retrieval, because their
+  defining instrument (the Drugs and Cosmetics Act and Rules) is not in the
+  corpus — a distance gate cannot tell a definition from a passing mention,
+  as the cosmetic probe proved by matching the Biological Diversity Act at
+  0.831.
+- **`routing.py`** — IP-type routing plus the ABS and TK triggers. Coverage is
+  DERIVED from `authority.py`, so indexing the Trade Marks Act is what made
+  the trademark route real. A triggered regime with no indexed source is
+  surfaced as out-of-coverage rather than dropped: the user still needs to
+  know that body of law applies. Also holds the TKDL pointer, which never
+  claims to have searched TKDL and says plainly that any TKDL record number
+  from an AI without NDA access should be treated as fabricated.
+- **`escalation.py`** — confidence derived from the retrieval distance the
+  pipeline already measures, not from asking a model how sure it is.
+  Escalation triggers only on observed conditions, so the reason shown is
+  never invented after the fact. Also holds the standing "information, not
+  legal advice" disclaimer.
+- **`privacy.py`** — data inventory, a bounded audit trail of pipeline
+  DECISIONS (no question or answer text, enforced by test), and retention.
+  Names the real exposure: SSE requires GET, so questions ride in the URL
+  query string and land in access logs.
+
+`generate.answer_query_streaming` emits all of this as one terminal
+`advisory` event — before `complete` on success, after `refused` on both
+refusal paths. Kept out of the answer text deliberately: the disclaimer,
+confidence and escalation offer are statements ABOUT an answer, not claims
+drawn from a source, and folding them in would put unverifiable sentences
+next to verified ones and ask Layer 2 to check them against a passage.
+
+## Corpus (20 documents / 1,966 chunks as of 2026-09-20, see corpus/manifest.md)
 Patents Act 1970 (Act), Biological Diversity Act 2002 (Act), two IPO guideline
 documents (2012 TK/Biological Material, 2025 AYUSH Examination), the WIPO TK
 documentation toolkit and the WIPO GRATK Treaty 2024 (both Informational —
@@ -135,6 +189,11 @@ the second is only ever tried as a fallback when the first finds nothing, so
 it can't change how any previously-verified document chunks.
 
 ## Known limitations (see docs/decisions.md for full evidence)
+- **Four of five India Acts are as-originally-enacted text**, with amendments not folded in — verified by counting `Ins./Subs./Omitted by` footnotes (zero in Trade Marks, GI, Designs, Plant Varieties; 174 in Copyright, which is genuinely consolidated). Concretely, the Trade Marks copy still describes the Intellectual Property Appellate Board, abolished in 2021. Recorded per document in `authority.py`'s `amendment_currency`. A consolidated replacement is the highest-value corpus improvement outstanding.
+- **Three of six formulation categories cannot be answered at all** (new drug, phytopharmaceutical, cosmetic). Their defining instrument, the Drugs and Cosmetics Act 1940 and its Rules, could not be indexed: the available 635-page compilation interleaves Act, Rules and ~20 Schedules under three numbering systems, and its amendment-footnote notation defeats the section detector. The system abstains and names the instrument to read instead.
+- **The advertising regime is uncovered.** The only reachable copy of the Drugs and Magic Remedies Act 1954 was a departmental extract, not the Act. Rejected rather than indexed.
+- **Hague Agreement and Budapest Treaty are sourced but not indexed** — their tables of contents swallow the document body, and they are the least relevant instruments here.
+- **Questions appear in server access logs**, because server-sent events require GET. See `privacy.py`.
 - **Retrieval vocabulary gap**: terse, negatively-framed statutory clauses (e.g. Patents Act §3(p), which never uses the word "patent") don't reliably rank highly against natural-language questions ("can X be patented?"), in neither vector nor BM25 nor hybrid. The system still returns substantively correct, citable answers from secondary sources discussing the same rule in fuller prose.
 - **Local LLM reliability**: Qwen 2.5 7B (standing in for the Claude API) is non-deterministic on borderline claim-verification judgments — mitigated with majority-vote verification, not eliminated. Revisit once an Anthropic API key is available.
 - **No genuine version-conflict test case** exists in the current corpus for Layer 3's core "surface the current source" requirement. A real candidate (Patents Rules 2003 vs. its 2024 amendment) was found and rejected on data-quality grounds — the only available mirror of the base 2003 text was a corrupted OCR scan, see `corpus/manifest.md`.

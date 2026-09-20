@@ -538,14 +538,32 @@ this points *to* the resource and never claims to have searched it.
 
 **Gate:** all three present on every answer path, refusals included.
 
-## Phase 16 — Multilingual delivery
+## Phase 16 — Multilingual delivery — DONE (Bhashini pending credentials)
 
 - [x] Cross-lingual retrieval measured with parallel question pairs; BM25
       no-match abstention fixed (2026-09-20).
-- [ ] Hindi query path end-to-end, not just answer translation.
-- [ ] Assess Bhashini for national-language delivery. **Needs user input:**
-      Bhashini API access requires registration and credentials.
-- [ ] Measure multilingual quality per language rather than assuming parity.
+- [x] Hindi query path end-to-end. A Hindi question retrieves from the English
+      corpus cross-lingually (bge-m3 is multilingual — that is why the PRD
+      chose it), is answered in English with citations, and can be translated
+      on request. Measured at the window the pipeline actually uses
+      (CANDIDATE_K=40): **Hindi 10/10, English 10/10** on the ten parallel
+      question pairs.
+- [x] Measured per language rather than assumed. The earlier "BLOCKED" status
+      rested on a false premise — that Hindi needed its own ground truth. A
+      Hindi question and its English twin share source chunks, so the English
+      ground truth serves both.
+- [ ] **Needs user input — Bhashini.** The problem statement names it as
+      national-language infrastructure. It requires registration and API
+      credentials, which only the account holder can obtain, and this project's
+      standing rule is that I never enter or hold API keys. Unblocked the
+      moment credentials exist and a decision is made on whether to route
+      translation through Bhashini instead of the configured LLM provider.
+- [ ] **Open — native Hindi corpus.** The Biological Diversity Rules 2024 and
+      FSSAI Ayurveda Aahara Regulations 2022 are bilingual; their Hindi halves
+      (pp.1-50 and pp.1-14) sit unindexed in `corpus/raw/`. Indexing them would
+      test something cross-lingual retrieval cannot: retrieval quality *within*
+      Hindi. Not a prerequisite for the multilingual claim, which is measured
+      above.
 
 **Gate:** per-language numbers written down, not asserted.
 
