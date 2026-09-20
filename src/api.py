@@ -57,7 +57,7 @@ def _parse_history(raw: str) -> list[dict]:
 
 
 @app.get("/api/ask")
-def ask(q: str, history: str = "[]"):
+def ask(q: str, history: str = "[]", jurisdiction: str = ""):
     """Stream pipeline events for a question as server-sent events.
 
     Declared `def` (not `async def`) on purpose: the pipeline is blocking
@@ -68,12 +68,18 @@ def ask(q: str, history: str = "[]"):
     in the query string (EventSource only supports GET, so it can't ride in
     a request body) — used solely to resolve follow-up questions, see
     generate.answer_query_streaming.
+
+    `jurisdiction` is "india" or "international"; anything else (including the
+    default empty string) means no filter, and the answer may draw on both.
+    An unrecognised value is treated as no filter rather than rejected, since
+    silently returning zero sources for a typo would look like a refusal.
     """
     turns = _parse_history(history)
+    scope = jurisdiction if jurisdiction in ("india", "international") else None
 
     def event_stream():
         try:
-            for event in answer_query_streaming(q, history=turns):
+            for event in answer_query_streaming(q, history=turns, jurisdiction=scope):
                 yield _sse(event)
         except Exception as exc:  # surface failures to the UI instead of a dead stream
             yield _sse({"type": "error", "message": f"{type(exc).__name__}: {exc}"})
@@ -114,6 +120,12 @@ def config():
         "model": llm_client.active_model_name(),
         "provider": llm_client.LLM_PROVIDER,
         "corpus_docs": len(DOC_AUTHORITY),
+        "jurisdictions": {
+            "india": sum(1 for m in DOC_AUTHORITY.values() if m["jurisdiction"] == "india"),
+            "international": sum(
+                1 for m in DOC_AUTHORITY.values() if m["jurisdiction"] == "international"
+            ),
+        },
     }
 
 

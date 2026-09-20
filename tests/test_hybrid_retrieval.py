@@ -77,3 +77,33 @@ def test_retrieve_hybrid_clamps_candidate_k_up_to_top_k():
 
     mock_vector.assert_called_once_with("query", top_k=40)
     mock_bm25.assert_called_once_with("query", top_k=40)
+
+
+def _hit(doc_id, chunk_id):
+    return {"chunk_id": chunk_id, "text": "x", "metadata": {"doc_id": doc_id}}
+
+
+def test_in_jurisdiction_matches_authority_metadata():
+    from hybrid_retrieval import _in_jurisdiction
+    assert _in_jurisdiction(_hit("patents_act_1970", "a"), "india")
+    assert not _in_jurisdiction(_hit("patents_act_1970", "a"), "international")
+    assert _in_jurisdiction(_hit("trips_agreement", "b"), "international")
+    assert not _in_jurisdiction(_hit("trips_agreement", "b"), "india")
+
+
+def test_no_jurisdiction_requested_keeps_everything():
+    from hybrid_retrieval import _in_jurisdiction
+    assert _in_jurisdiction(_hit("patents_act_1970", "a"), None)
+    assert _in_jurisdiction(_hit("trips_agreement", "b"), None)
+    # even a doc_id with no authority entry at all
+    assert _in_jurisdiction(_hit("not_a_real_doc", "c"), None)
+
+
+def test_unclassifiable_doc_is_excluded_when_a_jurisdiction_is_requested():
+    # Fails closed on purpose: the problem statement requires the two
+    # answer-sets never be conflated, so a document whose jurisdiction cannot
+    # be resolved must not slip into a scoped answer.
+    from hybrid_retrieval import _in_jurisdiction
+    assert not _in_jurisdiction(_hit("not_a_real_doc", "c"), "india")
+    assert not _in_jurisdiction(_hit("not_a_real_doc", "c"), "international")
+    assert not _in_jurisdiction({"metadata": {}}, "india")

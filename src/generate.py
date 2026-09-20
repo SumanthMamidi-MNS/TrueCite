@@ -33,7 +33,7 @@ from authority import get_authority
 from citation import format_citation, resolve_authority
 from confidence_gate import CONFIDENCE_THRESHOLD, passes_confidence_gate
 from coverage import assess_coverage
-from hybrid_retrieval import retrieve_hybrid
+from hybrid_retrieval import _in_jurisdiction, retrieve_hybrid
 from relevance import apply_relevance, judge_relevance
 from retrieval import retrieve as retrieve_vector
 from verification import verify_claim
@@ -122,14 +122,28 @@ Respond with ONLY a JSON object in this exact format, no other text:
 """
 
 
-def _select_grounded_hits_with_diagnostics(query: str, top_k: int) -> tuple[list[dict], dict]:
+def _select_grounded_hits_with_diagnostics(
+    query: str, top_k: int, jurisdiction: str | None = None
+) -> tuple[list[dict], dict]:
     """Layer 1 gate (on vector distance) + hybrid ordering + authority ordering.
 
     Returns (hits, diagnostics). The diagnostics are what the UI's pipeline
     view reports (candidate counts, the best distance actually seen vs. the
     threshold) — the selection logic itself is unchanged.
     """
-    vector_hits = retrieve_vector(query, top_k=CANDIDATE_K)
+    # Layer 1 judges confidence on the SAME jurisdiction the answer will be
+    # drawn from. Gating on a mixed pool would let a confident international
+    # chunk open the gate for an India-scoped question that has no grounded
+    # Indian source -- the gate would pass and the answer would then be
+    # built from weaker material, which is precisely the failure Layer 1
+    # exists to prevent.
+    if jurisdiction:
+        vector_hits = [
+            h for h in retrieve_vector(query, top_k=CANDIDATE_K * 3)
+            if _in_jurisdiction(h, jurisdiction)
+        ][:CANDIDATE_K]
+    else:
+        vector_hits = retrieve_vector(query, top_k=CANDIDATE_K)
     best_distance = vector_hits[0]["distance"] if vector_hits else None
     diagnostics = {
         "candidates_examined": len(vector_hits),
@@ -153,7 +167,9 @@ def _select_grounded_hits_with_diagnostics(query: str, top_k: int) -> tuple[list
     # itself was raised 20->40 after a correctly-worded statutory clause
     # ranked #29 was outside the old fetch window) — a retrieval window too
     # narrow to reach a passage that's actually there.
-    hybrid_hits = retrieve_hybrid(query, top_k=CANDIDATE_K, candidate_k=CANDIDATE_K)
+    hybrid_hits = retrieve_hybrid(
+        query, top_k=CANDIDATE_K, candidate_k=CANDIDATE_K, jurisdiction=jurisdiction
+    )
     candidates = [h for h in hybrid_hits if h["chunk_id"] in confident_ids]
     if not candidates:
         # Hybrid's own top-K didn't include any Layer-1-confident chunk even
@@ -176,8 +192,8 @@ def _select_grounded_hits_with_diagnostics(query: str, top_k: int) -> tuple[list
     return top_candidates, diagnostics
 
 
-def _select_grounded_hits(query: str, top_k: int) -> list[dict]:
-    hits, _ = _select_grounded_hits_with_diagnostics(query, top_k)
+def _select_grounded_hits(query: str, top_k: int, jurisdiction: str | None = None) -> list[dict]:
+    hits, _ = _select_grounded_hits_with_diagnostics(query, top_k, jurisdiction)
     return hits
 
 
@@ -276,6 +292,7 @@ def answer_query_streaming(
     history: list[dict] | None = None,
     relevance_filter: bool = False,
     coverage_check: bool = True,
+    jurisdiction: str | None = None,
 ):
     """Run the pipeline, yielding an event per stage as it happens.
 
@@ -339,7 +356,7 @@ def answer_query_streaming(
         }
 
     yield {"type": "stage", "stage": "retrieval", "status": "start"}
-    hits, diag = _select_grounded_hits_with_diagnostics(effective_query, top_k)
+    hits, diag = _select_grounded_hits_with_diagnostics(effective_query, top_k, jurisdiction)
     yield {
         "type": "stage",
         "stage": "retrieval",
