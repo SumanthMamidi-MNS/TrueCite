@@ -475,14 +475,29 @@ as-originally-enacted text with amendments not folded in, verified by counting
 amendment footnotes. Recorded per document in `amendment_currency`. A
 consolidated replacement is the highest-value corpus improvement outstanding.
 
-## Phase 11 — Jurisdiction switch
+## Phase 11 — Jurisdiction switch — DONE
 
-- [ ] Filter retrieval by jurisdiction; India and international answer-sets
-      kept visibly separate, never merged into one answer.
-- [ ] UI toggle, with the active jurisdiction stated on every answer.
+- [x] Retrieval filters by jurisdiction, resolved per doc_id from
+      `authority.py` at query time (not stored in vector metadata, so
+      correcting a document never forces a re-embed).
+- [x] Layer 1 gates on the same jurisdiction the answer is drawn from —
+      otherwise a confident international chunk could open the gate for an
+      India-scoped question with no grounded Indian source.
+- [x] Filtering happens before fusion over an enlarged fetch, so a scoped
+      query still returns a full `top_k` rather than a quietly short list.
+- [x] A document whose jurisdiction cannot be resolved is excluded from a
+      scoped query. Failing closed is the only reading consistent with
+      "never conflated".
+- [x] UI: three-state control (All sources / India / International) above the
+      composer, the scope snapshotted at ask time and stamped onto the answer
+      it produced, persisted with the conversation.
 
-**Gate:** paired India/international questions return disjoint, correct source
-sets; no answer cites across the boundary without saying so.
+**Gate — met.** Verified live against the rebuilt index: the same ABS question
+returns `biological_diversity_rules_2024` under India and `nagoya_protocol`
+under International, with zero jurisdiction leakage in either direction and a
+full result count. The same TK question returns IPO guidelines under India and
+WIPO/PCT material under International. Browser-verified that the control sends
+`&jurisdiction=india` on the wire and that the answer carries its scope label.
 
 ## Phase 12 — Formulation classification flow
 
