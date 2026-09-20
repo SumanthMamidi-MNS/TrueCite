@@ -48,6 +48,14 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 
+/* Visually hidden, still announced. Used for the words that make a compact
+   chip a full sentence to a screen reader (e.g. the jurisdiction tag on an
+   answer) without printing them twice on screen. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+
 html, body { height: 100%; margin: 0; }
 body {
   background: var(--ink-900);
@@ -270,8 +278,13 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 
 /* ══════════ verification block ══════════ */
 
-.verify { margin-bottom: .25rem; }
+/* Row, not a block: the collapsed summary pill and the jurisdiction tag sit
+   on one line together, and the expanded stepper takes a full-width line of
+   its own underneath (flex-basis: 100%) — so adding the tag can't push the
+   pipeline panel out of place or reorder anything inside it. */
+.verify { margin-bottom: .25rem; display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .5rem; }
 .verify-body {
+  flex: 1 1 100%;
   border: 1px solid var(--line); border-radius: var(--radius);
   background: rgba(255,255,255,.018); padding: .9rem 1rem;
 }
@@ -294,6 +307,22 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 .verify-summary.busy { border-color: rgba(127,168,240,.3); background: rgba(127,168,240,.1); color: var(--blue); }
 .verify-summary .caret { transition: transform .25s var(--ease); opacity: .7; }
 .verify:not(.collapsed) .verify-summary .caret { transform: rotate(90deg); }
+
+/* Jurisdiction stamp on an answer. Borrows the source-tier palette exactly
+   (gold = Indian instruments, blue = international, neutral = unfiltered)
+   rather than introducing a colour: those three tints already sit next to
+   each other inside an answer's Sources list, and neither carries the
+   verified/refused meaning that green and amber do here. A filtered answer
+   is tinted, an unfiltered one is not, so "India only" can never be mistaken
+   at a glance for "All sources". */
+.scope-tag {
+  display: inline-flex; align-items: center; flex: none;
+  padding: .24rem .6rem; border-radius: 999px;
+  font-family: var(--font-mono); font-size: .69rem; letter-spacing: .06em;
+  color: var(--text-mute); background: rgba(255,255,255,.03); border: 1px solid var(--line);
+}
+.scope-tag-india { color: var(--gold-400); background: rgba(224,163,85,.12); border-color: rgba(224,163,85,.3); }
+.scope-tag-international { color: var(--blue); background: rgba(127,168,240,.1); border-color: rgba(127,168,240,.26); }
 
 /* stepper */
 .steps { list-style: none; margin: 0; padding: 0; }
@@ -471,6 +500,38 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
   padding: .5rem clamp(1rem,3vw,2rem) 1rem;
   background: linear-gradient(180deg, rgba(8,10,16,0), var(--ink-900) 28%);
 }
+/* Jurisdiction scope, directly above the composer and on the same 820px
+   measure, so it reads as part of asking the question rather than as a
+   filter over what came back. Real radio inputs under the segments: native
+   arrow-key roving and checked semantics for free, no JS keyboard layer. */
+.scope-bar {
+  max-width: 820px; margin: 0 auto .5rem; padding: 0 .15rem;
+  display: flex; align-items: center; gap: .45rem .7rem; flex-wrap: wrap;
+}
+.scope-label { font-size: .67rem; letter-spacing: .14em; text-transform: uppercase; color: var(--text-mute); }
+.scope-seg {
+  display: inline-flex; padding: 2px; gap: 2px;
+  background: rgba(255,255,255,.022); border: 1px solid var(--line); border-radius: 999px;
+}
+.scope-input { position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; }
+.scope-opt {
+  padding: .3rem .72rem; border-radius: 999px; cursor: pointer;
+  font-size: .76rem; color: var(--text-dim); white-space: nowrap;
+  transition: background .2s var(--ease), color .2s var(--ease), box-shadow .2s var(--ease);
+}
+.scope-opt:hover { background: rgba(255,255,255,.045); color: var(--text); }
+.scope-input:checked + .scope-opt {
+  color: var(--gold-400); background: rgba(224,163,85,.13);
+  box-shadow: inset 0 0 0 1px rgba(224,163,85,.3);
+}
+/* Focus ring lives on the label because the input itself is visually gone —
+   without this, keyboard users would move through the segments blind. */
+.scope-input:focus-visible + .scope-opt { outline: 2px solid rgba(242,197,124,.6); outline-offset: 2px; }
+.scope-counts {
+  margin-left: auto; font-family: var(--font-mono); font-size: .68rem; color: var(--text-mute);
+}
+.scope-counts:empty { display: none; }
+
 .composer {
   max-width: 820px; margin-inline: auto;
   display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .6rem; align-items: end;
@@ -540,6 +601,17 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
   .live-chip { display: none; }
 }
 @media (min-width: 861px) { .side-close { display: none; } }
+
+/* Narrow: the label and the corpus counts keep the first line (the counts
+   still pushed right by their margin-left:auto), and the segmented control
+   drops to a full-width row of three equal segments — reordered rather than
+   shrunk, so "International" never truncates and every target stays a
+   comfortable tap size. */
+@media (max-width: 620px) {
+  .scope-bar { gap: .4rem .6rem; }
+  .scope-seg { order: 3; flex: 1 1 100%; }
+  .scope-opt { flex: 1; text-align: center; padding: .34rem .4rem; }
+}
 
 /* ══════════ motion ══════════ */
 

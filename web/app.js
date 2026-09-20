@@ -19,8 +19,31 @@ const historyEl = $("#history");
 const chatTitle = $("#chat-title");
 
 const STORE_KEY = "ipsakti.conversations.v1";
+const SCOPE_KEY = "ipsakti.jurisdiction.v1";
+
+/* Jurisdiction scope. "all" is the absence of a filter, not a third value the
+   API knows about — it sends no `jurisdiction` param at all (see ask()).
+   `tag` is what gets stamped on the answer; `full` is the title/screen-reader
+   sentence, spelled out because "India only" on its own is a label, not a
+   statement of what was searched. */
+const SCOPE_META = {
+  all: {
+    tag: "All sources",
+    full: "Answered from the whole corpus — Indian and international instruments together.",
+  },
+  india: {
+    tag: "India only",
+    full: "Answered from Indian instruments only — no treaty or international source was consulted.",
+  },
+  international: {
+    tag: "International only",
+    full: "Answered from international instruments only — no Indian Act, Rule or guideline was consulted.",
+  },
+};
+const isScope = (v) => Object.prototype.hasOwnProperty.call(SCOPE_META, v);
 
 let conversations = loadStore();
+let scope = loadScope();
 let activeId = null;
 let stream = null;
 let busy = false;
@@ -41,6 +64,35 @@ function loadStore() {
 function saveStore() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(conversations.slice(0, 40))); }
   catch { /* private mode / quota — history is a convenience, not load-bearing */ }
+}
+
+function loadScope() {
+  // Same shape as loadStore above: any storage failure (private mode, blocked
+  // site data) falls back to the unfiltered default rather than throwing, and
+  // an unrecognised stored value is treated as unset.
+  try {
+    const v = localStorage.getItem(SCOPE_KEY);
+    return isScope(v) ? v : "all";
+  } catch { return "all"; }
+}
+function saveScope(v) {
+  try { localStorage.setItem(SCOPE_KEY, v); }
+  catch { /* private mode / quota — the choice still holds for this session */ }
+}
+
+// Paints the jurisdiction stamp on one answer. `value` is the scope that
+// answer actually ran under, never the live control: an unrecognised or
+// missing value (a conversation stored before this feature existed, replayed
+// from localStorage) renders nothing at all rather than claiming a scope that
+// was never applied — same convention as coverageHTML.
+function paintScopeTag(el, value) {
+  if (!el) return;
+  if (!isScope(value)) { el.hidden = true; return; }
+  const meta = SCOPE_META[value];
+  el.className = `scope-tag scope-tag-${value}`;
+  el.innerHTML = `<span class="sr-only">Sources used — </span>${esc(meta.tag)}`;
+  el.title = meta.full;
+  el.hidden = false;
 }
 
 function tierClass(level = "") {
@@ -126,12 +178,16 @@ function botShell() {
   return el;
 }
 
-function attachPipeline(body) {
+function attachPipeline(body, scopeValue) {
   const node = $("#tpl-pipeline").content.cloneNode(true);
   body.appendChild(node);
   const verify = $(".verify", body);
   $(".verify-summary", verify).addEventListener("click", () =>
     verify.classList.toggle("collapsed"));
+  // Stamped up front, not on completion: while the pipeline is still running
+  // it says which instruments are being searched, and it is the same element
+  // that remains as the answer's permanent scope label afterwards.
+  paintScopeTag($("[data-scope-tag]", verify), scopeValue);
   return verify;
 }
 
@@ -308,9 +364,11 @@ function replayAssistant(res, meta = {}) {
         <span class="vs-text">${esc(meta.summary || (res.refused ? "Refused — not grounded" : "Verified"))}</span>
         <span class="caret">›</span>
       </button>
+      <span class="scope-tag" data-scope-tag hidden></span>
     </div>
     ${answerHTML(res)}
     ${actionsHTML()}`;
+  paintScopeTag($("[data-scope-tag]", body), meta.scope);
   wireAnswer(body, res);
   return el;
 }
@@ -323,13 +381,18 @@ function ask(question) {
   sendBtn.disabled = true;
   empty.hidden = true;
 
+  // Read once, here. Everything downstream — the request, the stamp on the
+  // answer, the record written to localStorage — uses this snapshot, so
+  // changing the control mid-run can't retroactively relabel an answer.
+  const askScope = scope;
+
   const conv = ensureConversation(question);
   thread.appendChild(userMessage(question));
 
   const msg = botShell();
   const body = $(".msg-body", msg);
   thread.appendChild(msg);
-  const verify = attachPipeline(body);
+  const verify = attachPipeline(body, askScope);
   toBottom(true);
 
   const stepEl = (n) => $(`.step[data-step="${n}"]`, verify);
@@ -364,7 +427,11 @@ function ask(question) {
   setStep(hasHistory ? "condense" : "retrieval", "active");
 
   const historyParam = hasHistory ? `&history=${encodeURIComponent(JSON.stringify(historyPayload))}` : "";
-  stream = new EventSource(`/api/ask?q=${encodeURIComponent(question)}${historyParam}`);
+  // "All sources" sends no param at all rather than jurisdiction=all — the
+  // API treats an absent (or unrecognised) value as "no filter", so omitting
+  // it is the literal request, not a shorthand for one.
+  const scopeParam = askScope === "all" ? "" : `&jurisdiction=${encodeURIComponent(askScope)}`;
+  stream = new EventSource(`/api/ask?q=${encodeURIComponent(question)}${historyParam}${scopeParam}`);
 
   stream.onmessage = (m) => {
     const ev = JSON.parse(m.data);
@@ -511,7 +578,7 @@ function ask(question) {
 
       body.insertAdjacentHTML("beforeend", answerHTML(res) + actionsHTML());
       wireAnswer(body, res);
-      conv.turns.push({ q: question, result: res, meta: { summary } });
+      conv.turns.push({ q: question, result: res, meta: { summary, scope: askScope } });
       conv.at = Date.now();
       saveStore();
       finish();
@@ -621,12 +688,21 @@ async function loadModelBadge() {
   const modelEl = $("#model-name");
   const corpusEl = $("#corpus-count");
   const limitEl = $("#limit-provider");
+  const scopeCountEl = $("#scope-counts");
   try {
     const res = await fetch("/api/config");
     if (!res.ok) throw new Error(String(res.status));
-    const { model, provider, corpus_docs } = await res.json();
+    const { model, provider, corpus_docs, jurisdictions } = await res.json();
     modelEl.textContent = `${formatModelName(model)} · ${PROVIDER_LABELS[provider] || provider}`;
     corpusEl.textContent = `${corpus_docs} primary source${corpus_docs === 1 ? "" : "s"} indexed`;
+    // Counted server-side from the same document registry the retrieval
+    // filter uses, so the split shown next to the toggle is always the split
+    // the toggle actually produces. Left blank (and hidden by CSS) if an
+    // older server doesn't report it — never a guessed or hardcoded number.
+    if (scopeCountEl && jurisdictions) {
+      scopeCountEl.textContent =
+        `${jurisdictions.india} Indian · ${jurisdictions.international} international`;
+    }
     if (limitEl) limitEl.innerHTML = limitationsProviderText(model, provider);
   } catch {
     modelEl.textContent = "Model unavailable — is the server running?";
@@ -721,6 +797,22 @@ $$(".sugg").forEach((s) => s.addEventListener("click", () => {
 }));
 
 $("#new-chat").addEventListener("click", newConversation);
+
+/* Jurisdiction control. The stored choice is applied to the radios on boot
+   rather than the markup's `checked` being the source of truth, so a reload
+   lands on what was last chosen; if storage is unavailable, loadScope() has
+   already resolved to "all" and this just re-asserts the default. Deliberately
+   usable while a question is in flight — the run already captured its own
+   scope, so the only thing changing it affects is the next question. */
+const scopeInputs = $$(".scope-input");
+scopeInputs.forEach((i) => {
+  i.checked = i.value === scope;
+  i.addEventListener("change", () => {
+    if (!i.checked || !isScope(i.value)) return;
+    scope = i.value;
+    saveScope(scope);
+  });
+});
 
 const openNav = () => { document.body.classList.add("nav-open"); $("#scrim").hidden = false; };
 const closeNav = () => { document.body.classList.remove("nav-open"); $("#scrim").hidden = true; };
