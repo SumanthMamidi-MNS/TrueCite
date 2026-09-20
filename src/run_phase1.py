@@ -3,6 +3,7 @@
 Run: .venv/Scripts/python.exe src/run_phase1.py
 """
 import json
+import re
 from dataclasses import asdict
 from pathlib import Path
 
@@ -86,6 +87,28 @@ ALL_DOCS = [
 ]
 
 
+# A line that is predominantly Devanagari, inside a page we are keeping for
+# its ENGLISH content, is the bilingual gazette's running header repeating at
+# every page break — not content. Left in, it poisons cross-lingual retrieval:
+# these documents contributed 32 chunks each carrying the same 27-character
+# Hindi header, and the worst (fssai::front-matter, 44 chars) was 61%
+# Devanagari. A near-pure Hindi string embeds close to ANY Hindi question, so
+# those chunks surfaced for unrelated Hindi queries and pushed the real answer
+# out of the top 5 — measured: Hindi expected-source-in-top-5 fell 8/10 to
+# 6/10 when these documents were added.
+_DEVANAGARI_RUN = re.compile(r"[ऀ-ॿ]")
+
+
+def _strip_other_script_lines(page: str, threshold: float = 0.3) -> str:
+    kept = []
+    for line in page.split("\n"):
+        letters = [c for c in line if c.isalpha()]
+        if letters and len(_DEVANAGARI_RUN.findall(line)) / len(letters) >= threshold:
+            continue
+        kept.append(line)
+    return "\n".join(kept)
+
+
 def _window(pages: list[str], span: tuple[int, int] | None) -> list[str]:
     """Blank pages outside a 1-indexed inclusive span, keeping page numbering.
 
@@ -93,11 +116,18 @@ def _window(pages: list[str], span: tuple[int, int] | None) -> list[str]:
     citation would report page 3 for text that is on page 53 of the source PDF.
     In a system whose whole claim is traceable citation, that is not an
     acceptable shortcut.
+
+    Kept pages also have their Devanagari running headers stripped — see
+    _strip_other_script_lines. Scoped to windowed (i.e. bilingual) documents
+    only, so a future natively-Hindi corpus document is untouched.
     """
     if not span:
         return pages
     first, last = span
-    return ["" if (i + 1) < first or (i + 1) > last else p for i, p in enumerate(pages)]
+    return [
+        "" if (i + 1) < first or (i + 1) > last else _strip_other_script_lines(p)
+        for i, p in enumerate(pages)
+    ]
 
 
 def main():
