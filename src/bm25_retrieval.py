@@ -117,11 +117,33 @@ class BM25Index:
         retrieval_texts = [
             build_retrieval_text(c, headings_by_doc[c.get("doc_id", "")]) for c in chunks
         ]
-        self._bm25 = BM25Okapi([tokenize(t) for t in retrieval_texts])
+        tokenized = [tokenize(t) for t in retrieval_texts]
+        # Kept for the token-overlap check in `retrieve` — see the comment
+        # there. Stored rather than read back off BM25Okapi so this does not
+        # depend on rank_bm25's internal attributes.
+        self._doc_tokens = [set(toks) for toks in tokenized]
+        self._bm25 = BM25Okapi(tokenized)
 
     def retrieve(self, query: str, top_k: int = 5) -> list[dict]:
-        scores = self._bm25.get_scores(tokenize(query))
-        ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+        query_tokens = tokenize(query)
+        scores = self._bm25.get_scores(query_tokens)
+        # Drop chunks sharing no token with the query. Without this, a query
+        # that matches nothing still yields top_k chunks in corpus order —
+        # and RRF fuses them at full weight, because it ranks rather than
+        # scores. A pure-Devanagari query matches nothing in this English
+        # corpus, so BM25 was injecting the same five arbitrary chunks into
+        # every Hindi result. See docs/decisions.md 2026-09-20.
+        #
+        # Tested on token overlap, not `score > 0`: BM25 IDF is exactly zero
+        # for a term in half the corpus, which a two-chunk index hits for a
+        # genuine match (tests/test_enrichment.py builds one). Overlap says
+        # what is actually meant here and holds at any corpus size.
+        wanted = set(query_tokens)
+        ranked = [
+            i
+            for i in sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+            if self._doc_tokens[i] & wanted
+        ][:top_k]
         return [
             {
                 "chunk_id": self.chunks[i]["chunk_id"],

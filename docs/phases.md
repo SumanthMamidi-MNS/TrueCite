@@ -234,6 +234,16 @@ Sequential, gated phases per PRD §9 — no fixed schedule. Each phase gates the
       tests. 61 tests pass. Corrected a real misunderstanding along the way: GitHub
       Pages cannot run this (static-only, no backend) — a live deployment needs an
       actual Python host, not chosen yet (Hugging Face Spaces / Render both fit).
+- [x] 2026-09-20: Cross-lingual retrieval measured and a real retrieval bug fixed.
+      Reframed eval category E from BLOCKED to measurable: a Hindi question and its
+      English twin should retrieve the same chunks, so section A's English ground
+      truth is the Hindi ground truth too — no Hindi corpus needed. Measuring it
+      surfaced a genuine bug: BM25 returned top_k arbitrary chunks for any query it
+      could not match, and RRF (rank-weighted, not score-weighted) fused that noise
+      in at full strength, poisoning every pure-Devanagari query. BM25 now abstains
+      on zero token overlap. Hindi 7/10 → 8/10, EN/HI overlap 2.3/5 → 3.1/5, English
+      unchanged at 9/10. 211 tests pass (3 new regression tests, each verified to
+      fail without the fix).
 - [x] 2026-09-20: Deployment abandoned permanently. Tried Hugging Face Spaces
       (free tier allows one running Space; the account's slot was already in use),
       Oracle Cloud Always Free, and Render (512 MB free tier vs this app's ~3-4 GB

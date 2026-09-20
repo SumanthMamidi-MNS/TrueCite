@@ -65,3 +65,45 @@ def test_short_words_are_not_truncated_below_four_characters():
     assert tokenize("act") == ["act"]
     assert tokenize("use") == ["use"]
     assert tokenize("acts") == ["acts"]
+
+
+def test_query_matching_nothing_returns_no_hits():
+    # Regression: BM25 used to return top_k chunks in corpus order for a
+    # query matching nothing, all scoring 0.0. Hybrid retrieval fuses by
+    # rank, not score, so those arbitrary chunks entered every fused result
+    # at full weight. Every pure-Devanagari query hits this against an
+    # English corpus. See docs/decisions.md 2026-09-20.
+    chunks = [
+        {"chunk_id": "a", "text": "Traditional knowledge cannot be patented under section 3(p)."},
+        {"chunk_id": "b", "text": "Approval from the National Biodiversity Authority is required."},
+        {"chunk_id": "c", "text": "AYUSH covers Ayurveda, Yoga, Unani, Siddha and Homoeopathy."},
+    ]
+    index = BM25Index(chunks)
+    assert index.retrieve("क्या पारंपरिक ज्ञान पेटेंट कराया जा सकता है", top_k=5) == []
+
+
+def test_unrelated_no_match_queries_do_not_return_the_same_arbitrary_chunks():
+    # The symptom that exposed the bug: two topically unrelated Hindi
+    # questions returned an identical chunk list, because neither matched
+    # anything and both fell back to corpus order.
+    chunks = [
+        {"chunk_id": "a", "text": "Traditional knowledge cannot be patented under section 3(p)."},
+        {"chunk_id": "b", "text": "Approval from the National Biodiversity Authority is required."},
+    ]
+    index = BM25Index(chunks)
+    patents = index.retrieve("क्या आविष्कार पेटेंट कराया जा सकता है", top_k=5)
+    ayush = index.retrieve("आयुष में कौन सी चिकित्सा पद्धतियाँ शामिल हैं", top_k=5)
+    assert patents == [] and ayush == []
+
+
+def test_genuine_match_survives_when_bm25_idf_is_zero():
+    # Guards the fix's own edge case: with two chunks, BM25 IDF is exactly
+    # zero for a term in one of them, so filtering on `score > 0` would
+    # discard a real lexical match. Overlap is the right test, not score.
+    chunks = [
+        {"chunk_id": "a", "text": "3. Alpha Provisions.\nNo person shall do the alpha thing."},
+        {"chunk_id": "b", "text": "9. Penalties.\nWhoever contravenes section 3 shall be fined."},
+    ]
+    index = BM25Index(chunks)
+    hits = index.retrieve("penalties contravenes", top_k=5)
+    assert [h["chunk_id"] for h in hits] == ["b"]

@@ -6,10 +6,11 @@ pipeline dependency. Not yet run through the system; "expected" answers below
 are hand-authored ground truth from the source documents, for later scoring
 citation accuracy / refusal rate / false-refusal rate once Phases 4-6 exist.
 
-Known gap: PRD §6.3 requires Hindi support "at minimum," but the corpus is
-currently English-only (see docs/decisions.md corpus-scope note) — so the
-multilingual questions below are placeholders, not yet answerable by this
-corpus. Flagging rather than faking results for them.
+PRD §6.3 requires Hindi support "at minimum." The corpus is English-only, but
+category E is no longer blocked by that: a Hindi question and its English twin
+should retrieve the *same* source chunks, so the English ground truth below is
+also the Hindi ground truth. Cross-lingual retrieval is measured that way
+(2026-09-20) — see category E.
 
 ## A. Answerable — strong single-document support
 
@@ -97,14 +98,45 @@ corpus. Flagging rather than faking results for them.
 
     *Note:* We don't yet have a genuine two-version conflict (e.g., an actually superseded rule with two different documents stating different rules). Still true as of the 2026-09-13 corpus expansion — a real candidate pair existed (the Patents Rules, 2003 base text and the Patents (Amendment) Rules, 2024) but the only available mirror of the 2003 base text was a corrupted OCR scan and was rejected on quality grounds (see `corpus/manifest.md`). Need a clean source for one of these before this category stops being thin — flag to user rather than force a contrived example.
 
-## E. Multilingual — BLOCKED, corpus is English-only
+## E. Multilingual — cross-lingual retrieval, measured 2026-09-20
 
-20. **Q (Hindi):** क्या पारंपरिक ज्ञान पर भारत में पेटेंट लिया जा सकता है? (Can traditional knowledge be patented in India?)
-    **Status:** Cannot be meaningfully evaluated — no Hindi source documents in the corpus yet. bge-m3 is multilingual and may retrieve *something* via cross-lingual embedding similarity, but there is no Hindi ground truth to verify against.
+Method: each question is asked in Hindi and in English, and both are expected to
+retrieve the same source document. The English ground truth in section A serves
+as the Hindi ground truth, so no Hindi corpus is required to measure this. What
+is measured is whether a Hindi speaker reaches the same sources an English
+speaker does — which is what PRD §6.3's "verify retrieval quality per language
+independently" actually asks.
 
-21-24. *(Reserved — add once Hindi-language source documents are added to the corpus, per PRD §6.3's requirement to verify retrieval quality per language independently.)*
+Result over the ten section-A pairs (`top_k=5`, hybrid retrieval):
+
+| | Expected source in top-5 | Mean EN/HI top-5 chunk overlap |
+|---|---|---|
+| English (control) | 9/10 | — |
+| Hindi | 8/10 | 3.1/5 |
+
+Found and fixed while measuring this: BM25 returned `top_k` arbitrary chunks in
+corpus order for any query matching nothing, and hybrid fusion weights by rank
+rather than score, so those chunks entered every Hindi result at full weight.
+Hindi went 7/10 → 8/10 and overlap 2.3/5 → 3.1/5 once BM25 was made to abstain
+instead (see docs/decisions.md). English was unchanged at 9/10, as expected —
+English queries always had real BM25 matches.
+
+20. **Q (Hindi):** क्या ऐसा आविष्कार जो मूलतः पारंपरिक ज्ञान है, भारत में पेटेंट कराया जा सकता है?
+    **Expected:** Same as A1 — `patents_act_1970::sec-3`.
+    **Status:** MISS in both languages. A pre-existing English retrieval weakness
+    (A1 also misses), not a cross-lingual one — worth separating from the Hindi result.
+
+21. **Q (Hindi):** यदि पेटेंट आवेदक अपने आविष्कार में प्रयुक्त जैविक सामग्री के भौगोलिक स्रोत का गलत खुलासा करता है, तो क्या होगा?
+    **Expected:** Same as A6 — `patents_act_1970::sec-25-sub-1`/`sec-25-sub-2`.
+    **Status:** HIT in English, MISS in Hindi. The one genuine cross-lingual
+    degradation left; cross-lingual embeddings capture topic but lose the
+    section-level specificity BM25 supplies for English.
+
+22-24. *(Reserved — for native Hindi source documents, which would test something
+this method cannot: retrieval quality *within* Hindi rather than across languages.)*
+
 
 ---
 
 **Count so far: 20 concrete + 5 reserved = 25, within PRD's 20-30 target.**
-**Still needed before Phase 6 can actually run:** Hindi corpus documents (category E), and a decision on whether to construct a synthetic version-conflict pair for category D or accept the corpus doesn't currently exercise that failure mode.
+**Still needed:** a decision on whether to construct a synthetic version-conflict pair for category D or accept the corpus doesn't currently exercise that failure mode. (Category E's blocker is resolved — see above.)
