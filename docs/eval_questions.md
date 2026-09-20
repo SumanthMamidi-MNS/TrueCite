@@ -140,3 +140,30 @@ this method cannot: retrieval quality *within* Hindi rather than across language
 
 **Count so far: 20 concrete + 5 reserved = 25, within PRD's 20-30 target.**
 **Still needed:** a decision on whether to construct a synthetic version-conflict pair for category D or accept the corpus doesn't currently exercise that failure mode. (Category E's blocker is resolved — see above.)
+
+## F. Domain regimes — end-to-end, Phase 18 (2026-09-20)
+
+Twelve questions, one per regime added in Phase 10, plus two controls that MUST
+refuse. Unlike categories A-E this measures the FULL pipeline, not retrieval:
+the Phase 10 gate already established the right statute is reachable, so what
+was unknown is whether the pipeline then answers from it, cites it, or refuses.
+
+The controls are not decoration. A suite where everything is answerable cannot
+detect a system that has stopped refusing, which is the failure this project
+cares about most.
+
+| | Result |
+|---|---|
+| Answerable questions | 12 |
+| Answered | 9 |
+| Cited the expected document | 9 of 9 answered |
+| Controls that must refuse | 2 |
+| Correct refusals | 2/2 |
+| **False answers** | **0** |
+
+The three declined (trade marks, designs, Ayurveda Aahara) all refused at Layer
+2 verification rather than the Layer 1 gate — retrieval found the right statute
+and Layer 2 rejected every drafted claim. Same over-strictness measured since
+Phase 9, now reproduced on regimes the system had never seen. Full per-question
+records: `corpus/eval_results/phase18_results.json`.
+
