@@ -7,7 +7,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from chunking import MAX_CHUNK_CHARS, MIN_SECTION_BODY_CHARS, _split_section_body, chunk_document
+from chunking import (
+    MAX_CHUNK_CHARS,
+    MIN_SECTION_BODY_CHARS,
+    SUBSECTION_RE,
+    _split_section_body,
+    chunk_document,
+)
 
 
 def test_footnote_text_does_not_create_spurious_section_or_swallow_real_one():
@@ -331,3 +337,47 @@ def test_validate_chunks_rejects_oversized_chunk():
     ]
     with pytest.raises(ValueError, match="MAX_INDEXABLE_CHUNK_CHARS"):
         validate_chunks("d", chunks)
+
+
+def test_cross_reference_line_does_not_fabricate_a_duplicate_subsection():
+    # Real bug (GI Act 1999, Designs Act 2000): PDF extraction wraps a
+    # sentence so a cross-reference lands at line start, e.g.
+    # "(2) of Section 3; (e) to the Registry...". SUBSECTION_RE anchors to
+    # line start, so it matched, fabricating a second "sub-2" that collided
+    # with the real one and overwrote it at index time.
+    from chunking import _monotonic_subsections
+    import re as _re
+    body = (
+        "(1) The first real subsection runs here.\n"
+        "(2) The second real subsection runs here.\n"
+        "(2) of Section 3; (e) to the Registry shall be construed as including\n"
+        "(3) The third real subsection runs here.\n"
+    )
+    matches = list(SUBSECTION_RE.finditer(body))
+    assert [m.group(1) for m in matches] == ["1", "2", "2", "3"]
+    kept = _monotonic_subsections(matches)
+    assert [m.group(1) for m in kept] == ["1", "2", "3"]
+
+
+def test_lettered_subsection_still_counts_as_advancing():
+    # 3A is a genuine distinct subsection in Indian drafting and must survive
+    # the monotonic filter -- (3, "") < (3, "A").
+    from chunking import _monotonic_subsections
+    body = "(3) Third subsection text here.\n(3A) Inserted subsection text here.\n(4) Fourth subsection.\n"
+    kept = _monotonic_subsections(list(SUBSECTION_RE.finditer(body)))
+    assert [m.group(1) for m in kept] == ["3", "3A", "4"]
+
+
+def test_rejected_marker_does_not_lose_text():
+    # The filter must only decline to SPLIT, never drop content: the
+    # cross-reference text has to remain inside the preceding chunk.
+    from chunking import _monotonic_subsections
+    body = (
+        "(1) First subsection.\n"
+        "(1) of section 15; (o) the rules to dispense with requirements\n"
+        "(2) Second subsection.\n"
+    )
+    kept = _monotonic_subsections(list(SUBSECTION_RE.finditer(body)))
+    spans = [body[kept[i].start(): (kept[i + 1].start() if i + 1 < len(kept) else len(body))]
+             for i in range(len(kept))]
+    assert "of section 15" in "".join(spans), "cross-reference text was dropped"

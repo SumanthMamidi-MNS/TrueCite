@@ -34,8 +34,16 @@ SECTION_RE = re.compile(r"^[ \t]*(\d{1,4}[A-Z]{0,2})\.\s+(.*)$", re.MULTILINE)
 # after the article number — confirmed directly on the source PDF's extracted
 # text, not a hypothetical. Only ever tried when SECTION_RE finds fewer than 2
 # matches (see _chunk_region), so it can't affect any numbered-section document.
+# A second numbering convention, alongside the Act-style "N. Title.—" above:
+# international treaty text (e.g. the WIPO GRATK Treaty) numbers "ARTICLE N"
+# with its title on the following line, not inline. Character class includes
+# U+00A0/U+202F (non-breaking/narrow-no-break space) because at least one real
+# heading in that document used a narrow-no-break space instead of ASCII space
+# after the article number — confirmed directly on the source PDF's extracted
+# text, not a hypothetical. Only ever tried when SECTION_RE finds fewer than 2
+# matches (see _chunk_region), so it can't affect any numbered-section document.
 ARTICLE_HEADING_RE = re.compile(
-    r"^ARTICLE\s+(\d{1,2})[ \t  ]*\r?\n[ \t  ]*([^\n]{2,80})[ \t  ]*$",
+    "^ARTICLE\\s+(\\d{1,2})[ \t\u00a0\u202f]*\r?\n[ \t\u00a0\u202f]*([^\\n]{2,80})[ \t\u00a0\u202f]*$",
     re.MULTILINE,
 )
 SUBSECTION_RE = re.compile(r"^[ \t]*\((\d{1,3}[A-Za-z]?)\)\s+", re.MULTILINE)
@@ -298,6 +306,41 @@ def _split_by_lettered_clauses(
     return chunks
 
 
+def _subsection_sort_key(sub_num: str) -> tuple[int, str]:
+    """(3, "") for "3", (3, "A") for "3A" — so 3A sorts after 3, not equal to it."""
+    m = re.match(r"(\d+)([A-Za-z]?)", sub_num)
+    return (int(m.group(1)), m.group(2).upper()) if m else (0, "")
+
+
+def _monotonic_subsections(matches: list) -> list:
+    """Drop subsection markers that do not advance the numbering.
+
+    A real subsection sequence only ever climbs: (1), (2), (3), (3A), (4).
+    A marker that repeats or goes backwards is a line-wrapped cross-reference
+    that merely begins a line — "(2) of Section 3; (e) to the Registry..." in
+    the GI Act, or "(1) of section 15; (o) the rules..." in the Designs Act.
+    SUBSECTION_RE already anchors to line start, which is not enough on its
+    own, because PDF extraction wraps mid-sentence.
+
+    Left in, these fabricate a second "sub-2" inside the same section, which
+    collides with the real one and silently overwrites it at index time.
+
+    This only declines to SPLIT at a rejected marker — the text is still
+    carried by the preceding chunk, so no content is ever dropped. The
+    failure mode of being wrong here is a slightly larger chunk, never a
+    missing one.
+    """
+    kept: list = []
+    last_key = (0, "")
+    for m in matches:
+        key = _subsection_sort_key(m.group(1))
+        if key <= last_key:
+            continue
+        kept.append(m)
+        last_key = key
+    return kept
+
+
 def _split_section_body(
     doc_id: str,
     section_number: str,
@@ -307,7 +350,7 @@ def _split_section_body(
     offsets: list[int],
 ) -> list[Chunk]:
     """Split an overlong section into sub-clause chunks, tagged with the parent section."""
-    matches = list(SUBSECTION_RE.finditer(body))
+    matches = _monotonic_subsections(list(SUBSECTION_RE.finditer(body)))
     has_inline_subsection_1 = bool(_INLINE_FIRST_SUBSECTION_RE.search(body[:300]))
     effective_match_count = len(matches) + (1 if has_inline_subsection_1 else 0)
     if effective_match_count < 2:
