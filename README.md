@@ -1,13 +1,3 @@
----
-title: TrueCite
-emoji: 📜
-colorFrom: indigo
-colorTo: green
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # TrueCite
 
 A source-cited RAG assistant for Ayurveda IP and regulatory guidance — every
@@ -18,7 +8,7 @@ ever shown to you.
 [![tests](https://img.shields.io/badge/tests-208%20passing-brightgreen)](tests/)
 [![license](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
-<!-- TODO: replace # with the live HF Space URL once deployed -->
+<!-- TODO: replace # with the live URL once deployed -->
 **[Live demo →](#)** <sub>(coming soon)</sub>
 
 ![TrueCite — the full verification pipeline, every step from question to cited answer](docs/assets/pipeline-poster.png)
@@ -138,11 +128,22 @@ python -m pytest tests/    # 208 tests, all fast — live model calls are mocked
 
 ## Deploying
 
-A `Dockerfile` at the repo root builds a Hugging Face Spaces–ready image
-(Docker SDK, listens on port 7860, ships the prebuilt corpus and index so
-there's no re-embedding step at build time). Set `LLM_PROVIDER`,
-`GEMINI_API_KEY`, and/or `ANTHROPIC_API_KEY` through the Space's own Secrets
-UI — none of them are committed or baked into the image.
+Any machine with Docker can run it. `docker-compose.yml` starts the app plus
+Caddy, which fetches and renews a free HTTPS certificate for your domain
+automatically. The image needs roughly 3–4 GB of RAM (the embedding model
+plus PyTorch), so free tiers of 512 MB will not work; an Oracle Cloud "Always
+Free" ARM VM (up to 24 GB) does.
+
+```bash
+git clone https://github.com/SumanthMamidi-MNS/TrueCite.git && cd TrueCite
+cp .env.example .env   # set DOMAIN, LLM_PROVIDER and your API key
+docker compose up -d --build
+```
+
+Point your domain's DNS at the machine's public IP (a free DuckDNS subdomain
+works) and open ports 80 and 443. Keys live only in `.env`, which is
+gitignored, and are never baked into the image. The first question downloads
+the embedding model once; a volume keeps it for later restarts.
 
 ## License
 

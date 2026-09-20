@@ -1,4 +1,4 @@
-# Hugging Face Spaces (Docker SDK) image for TrueCite.
+# Container image for TrueCite (runs on any Docker host; see docker-compose.yml).
 #
 # Python 3.12 to match what this project was built and tested against
 # (docs/architecture.md: "Language: Python 3.12").
@@ -12,10 +12,10 @@ WORKDIR /app
 COPY requirements.txt .
 # sentence-transformers pulls in torch; PyPI's default wheel bundles full
 # CUDA support (~3GB of libraries this CPU-only deployment never uses).
-# Installing the CPU-only build first, pinned to the version
-# requirements.txt's resolver picks, keeps the rest of the install from
-# quietly pulling the CUDA build back in.
-RUN pip install --no-cache-dir torch==2.14.0+cpu --index-url https://download.pytorch.org/whl/cpu \
+# Installing the CPU-only build first (unpinned, so the same file also
+# builds on ARM servers) keeps the rest of the install from quietly
+# pulling the CUDA build back in.
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements.txt
 
 # Only what src/api.py actually reads at request time (see src/generate.py,
@@ -40,12 +40,12 @@ COPY corpus/raw/ ./corpus/raw/
 COPY corpus/processed/ ./corpus/processed/
 COPY corpus/chroma_db/ ./corpus/chroma_db/
 
-# Hugging Face Spaces' Docker SDK routes traffic to port 7860 by default.
-EXPOSE 7860
+EXPOSE 8000
 
 # LLM_PROVIDER / GEMINI_API_KEY / ANTHROPIC_API_KEY are intentionally not set
-# here — they're supplied at runtime via the Space's own Secrets UI. Unset,
+# here — they're supplied at runtime through the host's environment or a
+# local .env file (see docker-compose.yml). Unset,
 # llm_client.py already defaults to the local Ollama provider, which is a
 # safe (if non-functional without an Ollama host reachable from the
 # container) default rather than silently baking in a provider choice.
-CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
