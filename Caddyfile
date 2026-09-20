@@ -1,7 +1,0 @@
-{$DOMAIN} {
-	# flush_interval -1 sends each pipeline stage to the browser as it happens
-	# (the answer streams as server-sent events).
-	reverse_proxy app:8000 {
-		flush_interval -1
-	}
-}

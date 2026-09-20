@@ -234,6 +234,13 @@ Sequential, gated phases per PRD §9 — no fixed schedule. Each phase gates the
       tests. 61 tests pass. Corrected a real misunderstanding along the way: GitHub
       Pages cannot run this (static-only, no backend) — a live deployment needs an
       actual Python host, not chosen yet (Hugging Face Spaces / Render both fit).
+- [x] 2026-09-20: Deployment abandoned permanently. Tried Hugging Face Spaces
+      (free tier allows one running Space; the account's slot was already in use),
+      Oracle Cloud Always Free, and Render (512 MB free tier vs this app's ~3-4 GB
+      need for bge-m3 + PyTorch). Removed the Spaces frontmatter, the compose/Caddy
+      scaffolding, and the live-demo placeholder; the `Dockerfile` stays for local
+      containerised runs. TrueCite is a locally-run app, documented as such — not a
+      hosted service.
 - [x] 2026-09-15: Added on-demand Hindi translation (`translation.py`, `POST
       /api/translate`, a "View in Hindi" button per answer) — translates the
       already-verified English answer rather than retrieving/generating natively in
