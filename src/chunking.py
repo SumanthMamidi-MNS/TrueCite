@@ -760,6 +760,8 @@ def chunk_document(
     pages: list[str],
     body_start_anchor: str | None = None,
     article_style: str = "upper",
+    body_end_anchor: str | None = None,
+    body_start_occurrence: int = 0,
 ) -> list[Chunk]:
     """Chunk a document's pages into structural chunks.
 
@@ -768,13 +770,30 @@ def chunk_document(
     contents and kept as a single unindexed-style chunk rather than being scanned
     for section numbers (a TOC lists section numbers too, and would otherwise be
     misread as real sections).
+
+    body_start_occurrence: which occurrence of that anchor to use, 0-based.
+    Treaties that print a full table of contents repeat every natural anchor,
+    so the first hit lands inside the TOC and the body is never reached.
+
+    body_end_anchor: text from this point on is a Schedule or annex, chunked
+    as paragraphs under a ``::schedule-part-N`` id instead of being scanned
+    for sections. Schedules number their own contents -- the Drugs and Magic
+    Remedies Act's lists 54 diseases -- and those numbers climb, so the
+    monotonic section filter cannot distinguish them from real sections. The
+    text is still indexed; only its structural interpretation changes.
     """
     full_text, offsets = _build_page_offsets(pages)
 
     anchor_pos = 0
     front_matter_chunks: list[Chunk] = []
     if body_start_anchor:
-        found = full_text.find(body_start_anchor)
+        found = -1
+        search_from = 0
+        for _ in range(body_start_occurrence + 1):
+            found = full_text.find(body_start_anchor, search_from)
+            if found == -1:
+                break
+            search_from = found + 1
         if found == -1:
             raise ValueError(
                 f"{doc_id}: body_start_anchor {body_start_anchor!r} not found in extracted "
@@ -803,8 +822,39 @@ def chunk_document(
     # restart per chapter), so matching/monotonic-filtering must run once over
     # the whole body — doing it chapter-by-chapter let a footnote's low number
     # slip past the monotonic check again at the start of each new chapter.
+    schedule_chunks: list[Chunk] = []
+    if body_end_anchor:
+        end_found = full_text.find(body_end_anchor, anchor_pos)
+        if end_found == -1:
+            raise ValueError(
+                f"{doc_id}: body_end_anchor {body_end_anchor!r} not found after the body "
+                "start (PDF extraction inserts stray spaces/line-wraps -- check the exact "
+                "substring rather than silently scanning the Schedule for sections)"
+            )
+        schedule_text = full_text[end_found:]
+        body_text = body_text[: end_found - anchor_pos]
+        for i, (start, end) in enumerate(
+            _merge_spans(_paragraph_spans(schedule_text), PARAGRAPH_TARGET_CHARS), start=1
+        ):
+            piece = schedule_text[start:end].strip()
+            if not piece:
+                continue
+            schedule_chunks.append(
+                Chunk(
+                    doc_id=doc_id,
+                    chunk_id=f"{doc_id}::schedule-part-{i}",
+                    heading="Schedule",
+                    section_number=None,
+                    parent_section_number=None,
+                    page_start=_page_for_offset(offsets, end_found + start),
+                    page_end=_page_for_offset(offsets, end_found + end),
+                    text=piece,
+                )
+            )
+
     chunks = list(front_matter_chunks)
     chunks.extend(_chunk_region(doc_id, body_text, anchor_pos, offsets, article_style))
+    chunks.extend(schedule_chunks)
     return chunks
 
 

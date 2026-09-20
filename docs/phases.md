@@ -428,35 +428,52 @@ guidance — precisely the failure this project exists to prevent. So corpus and
 its metadata come first, and every domain feature after it must cite real
 retrieved provisions or abstain.
 
-## Phase 10 — Corpus & metadata foundation — IN PROGRESS
+## Phase 10 — Corpus & metadata foundation — SUBSTANTIALLY DONE
+
+Corpus went from 7 documents / 491 chunks to **20 documents / 1,968 chunks**.
+Sourcing, verification, chunking fixes, metadata and provenance are complete;
+two instruments are deferred and one is an open gap, each recorded below and in
+`corpus/manifest.md` rather than quietly dropped.
 
 Source, verify and index the instruments the problem statement names, and add
 the metadata later phases route on.
 
-- [ ] National IP: Patents Rules 2024; GI Act 1999; Trade Marks Act 1999;
-      Designs Act 2000; Copyright Act 1957; Protection of Plant Varieties and
-      Farmers' Rights Act 2001.
-- [ ] National ABS: Biological Diversity (Amendment) Act 2023 and the 2024
-      Rules (the 2002 base Act is already indexed).
-- [ ] National drug/advertising/food: Drugs and Cosmetics Act 1940 (with the
-      Ayurvedic/Siddha/Unani provisions and First Schedule), Drugs and Magic
-      Remedies (Objectionable Advertisements) Act 1954, FSSAI Ayurveda Aahar
-      regulations.
-- [ ] International: TRIPS; Convention on Biological Diversity; Nagoya
-      Protocol; PCT; Madrid Protocol; Hague Agreement; Budapest Treaty. (The
-      WIPO GRATK Treaty 2024 is already indexed.)
-- [ ] Extend `authority.py` with `jurisdiction` (india | international) and
-      `regime` (patent | gi | trademark | design | copyright | pvp |
-      trade-secret | abs | drug-regulatory | advertising | food-cosmetic) on
-      every entry, old and new, plus effective-date/version tracking for the
-      amended instruments.
-- [ ] Re-chunk and re-index; update `corpus/manifest.md` with provenance and
-      retrieval date for each source.
+- [x] National IP: GI Act 1999, Trade Marks Act 1999, Designs Act 2000,
+      Copyright Act 1957, Plant Varieties Act 2001. **Patents Rules 2024
+      rejected** — no official consolidated text incorporating the 2024
+      amendments exists; merging the unmerged notifications ourselves would
+      mean citing a consolidation no authority endorsed.
+- [x] National ABS: Biological Diversity (Amendment) Act 2023 and the 2024
+      Rules.
+- [x] National food: FSSAI Ayurveda Aahara Regulations 2022.
+- [ ] **OPEN GAP — advertising regime.** The only reachable copy of the Drugs
+      and Magic Remedies Act 1954 was a departmental extract, not the Act;
+      rejected. indiacode.nic.in was 404 site-wide during this pass. Needs an
+      authentic source before the advertising regime can be answered at all.
+- [ ] **OPEN — Drugs and Cosmetics Act 1940 + Rules.** Sourced and clean
+      (635pp, covers phytopharmaceutical, First Schedule, ASU licensing — the
+      material Phase 12's classification flow needs most), but it is a
+      three-numbering-system compilation that chunks to 1063 chunks under 164
+      ids. Needs splitting into separate Act / Rules / Schedule doc_ids.
+- [x] International: TRIPS, CBD, Nagoya, PCT, Madrid. **Hague and Budapest
+      deferred** — TOC swallows the body, and they are the least relevant
+      instruments here.
+- [x] `authority.py` extended with `jurisdiction`, `regimes` (a list — TRIPS
+      spans six) and `amendment_currency`, plus Rules and Treaty authority
+      levels. All 20 entries carry every field; enforced by tests.
+- [x] Re-chunked and re-indexed; `corpus/manifest.md` records provenance,
+      retrieval date, amendment currency and every rejection with its reason.
 
 **Gate:** a hand-checked retrieval question per regime returns the correct
-statute and section. Any source that can only be obtained as a poor OCR scan is
-rejected and recorded as rejected, not silently degraded — as was done for the
-Patents Rules 2003 base text in Phase 1b.
+statute and section. Sources that cannot be obtained authentically are rejected
+and recorded as rejected, not silently degraded — done here for the Patents
+Rules (no endorsed consolidation exists) and the Drugs and Magic Remedies Act
+(departmental extract, not the Act).
+
+**Known limitation carried forward:** four of five India Acts are
+as-originally-enacted text with amendments not folded in, verified by counting
+amendment footnotes. Recorded per document in `amendment_currency`. A
+consolidated replacement is the highest-value corpus improvement outstanding.
 
 ## Phase 11 — Jurisdiction switch
 
