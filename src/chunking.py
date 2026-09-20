@@ -46,6 +46,22 @@ ARTICLE_HEADING_RE = re.compile(
     "^ARTICLE\\s+(\\d{1,2})[ \t\u00a0\u202f]*\r?\n[ \t\u00a0\u202f]*([^\\n]{2,80})[ \t\u00a0\u202f]*$",
     re.MULTILINE,
 )
+# The title-case and colon-inline article layouts, used by TRIPS ("Article 1"
+# then title on the next line), CBD (the number wraps onto its own line) and
+# the Hague/Budapest treaties ("Article 1: Title"). Kept SEPARATE from
+# ARTICLE_HEADING_RE rather than widening it: widening the shared pattern was
+# tried and regressed two documents that were already correct (Madrid 34
+# chunks -> 71 with duplicate ids, PCT 97 -> 156), because they reach the
+# article path too and this pattern matches prose in them. Only documents that
+# declare article_style="wide" in run_phase1's ALL_DOCS ever see it.
+ARTICLE_HEADING_WIDE_RE = re.compile(
+    "^[ \t\u00a0\u202f]*ARTICLE[ \t\u00a0\u202f]*\r?\n?[ \t\u00a0\u202f]*(\\d{1,2})"
+    "[ \t\u00a0\u202f]*(?::[ \t\u00a0\u202f]*|\r?\n[ \t\u00a0\u202f]*)"
+    "([^\\n]{2,80}?)[ \t\u00a0\u202f]*$",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+
 SUBSECTION_RE = re.compile(r"^[ \t]*\((\d{1,3}[A-Za-z]?)\)\s+", re.MULTILINE)
 LETTERED_CLAUSE_RE = re.compile(r"^[ \t]*\(([a-z]{1,3})\)\s+", re.MULTILINE)
 # Subsection "(1)" is almost always inline right after the heading's own
@@ -167,9 +183,30 @@ _FINITE_VERB_RE = re.compile(
 _MAX_TITLE_WORDS = 16
 
 
+def _strip_page_number_lines(text: str) -> str:
+    """Drop bare page-number lines, except where the number IS the structure.
+
+    The CBD prints article headings across three lines -- "Article", then the
+    number alone, then the title -- and a lone number is exactly what
+    _PAGE_NUMBER_LINE_RE exists to delete. Stripping it silently removed every
+    article number in that document, so the article pattern found one heading
+    where the raw text has 43, and the convention fell through to section
+    chunking with 40,000-character chunks. The number is only kept when the
+    preceding text ends with "Article", which no running footer does.
+    """
+
+    def keep_if_article_number(m: "re.Match") -> str:
+        preceding = text[: m.start()].rstrip()
+        if re.search(r"\barticle\s*$", preceding, re.IGNORECASE):
+            return m.group(0)
+        return ""
+
+    return _PAGE_NUMBER_LINE_RE.sub(keep_if_article_number, text)
+
+
 def _clean_page_text(text: str) -> str:
     text = _FOOTNOTE_LINE_RE.sub("", text)
-    text = _PAGE_NUMBER_LINE_RE.sub("", text)
+    text = _strip_page_number_lines(text)
     text = _DOC_CODE_HEADER_LINE_RE.sub("", text)
     text = _CONVERTER_ARTIFACT_LINE_RE.sub("", text)
     text = _FUSED_FOOTNOTE_BRACKET_RE.sub("", text)
@@ -485,6 +522,28 @@ def _monotonic_lettered_clauses(body: str) -> list[re.Match]:
     return accepted
 
 
+def _monotonic_articles(matches: list) -> list:
+    """Keep only articles that advance the numbering.
+
+    Treaties print a table of contents listing every article, then the body
+    repeats them from 1. Without this, both series match and every article id
+    is emitted twice, which the vector store resolves by silently overwriting.
+    Keeping the first monotonic run means the TOC wins on a document whose TOC
+    precedes the body -- so documents using this path still need a
+    body_start_anchor, exactly as Acts do; this is the second line of defence,
+    not the first.
+    """
+    kept: list = []
+    last = 0
+    for m in matches:
+        n = int(m.group(1))
+        if n <= last:
+            continue
+        kept.append(m)
+        last = n
+    return kept
+
+
 def _chunk_treaty_articles(
     doc_id: str, text: str, region_start_offset: int, offsets: list[int], matches: list[re.Match]
 ) -> list[Chunk]:
@@ -548,9 +607,28 @@ def _chunk_treaty_articles(
 
 
 def _chunk_region(
-    doc_id: str, text: str, region_start_offset: int, offsets: list[int]
+    doc_id: str, text: str, region_start_offset: int, offsets: list[int],
+    article_style: str = "upper",
 ) -> list[Chunk]:
-    """Chunk one contiguous region (e.g. one chapter, or the whole doc) by numbered sections."""
+    """Chunk one contiguous region (e.g. one chapter, or the whole doc) by numbered sections.
+
+    article_style="wide" declares the region to be treaty text whose articles
+    use the title-case/colon layouts, and makes the article structure take
+    precedence over SECTION_RE. That precedence is the point: these treaties
+    contain enough "1. "-style numbered paragraphs INSIDE their articles to
+    clear SECTION_RE's two-match bar, but those numbers restart at every
+    article, so the monotonic filter collapses them to a handful of enormous
+    chunks (the Hague Agreement: 71 pages, 3 chunks, the largest 123,901
+    characters). Section numbering is the wrong structure for these documents,
+    not merely a competing one.
+    """
+    if article_style == "wide":
+        wide_matches = list(ARTICLE_HEADING_WIDE_RE.finditer(text))
+        if len(wide_matches) >= 2:
+            return _chunk_treaty_articles(
+                doc_id, text, region_start_offset, offsets, _monotonic_articles(wide_matches)
+            )
+
     raw_matches = list(SECTION_RE.finditer(text))
     content_filtered = [
         m for m in raw_matches
@@ -677,7 +755,12 @@ def _chunk_region(
     return chunks
 
 
-def chunk_document(doc_id: str, pages: list[str], body_start_anchor: str | None = None) -> list[Chunk]:
+def chunk_document(
+    doc_id: str,
+    pages: list[str],
+    body_start_anchor: str | None = None,
+    article_style: str = "upper",
+) -> list[Chunk]:
     """Chunk a document's pages into structural chunks.
 
     body_start_anchor: if given, text before the first occurrence of this string
@@ -721,7 +804,7 @@ def chunk_document(doc_id: str, pages: list[str], body_start_anchor: str | None 
     # the whole body — doing it chapter-by-chapter let a footnote's low number
     # slip past the monotonic check again at the start of each new chapter.
     chunks = list(front_matter_chunks)
-    chunks.extend(_chunk_region(doc_id, body_text, anchor_pos, offsets))
+    chunks.extend(_chunk_region(doc_id, body_text, anchor_pos, offsets, article_style))
     return chunks
 
 

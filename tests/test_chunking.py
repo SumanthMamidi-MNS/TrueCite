@@ -381,3 +381,41 @@ def test_rejected_marker_does_not_lose_text():
     spans = [body[kept[i].start(): (kept[i + 1].start() if i + 1 < len(kept) else len(body))]
              for i in range(len(kept))]
     assert "of section 15" in "".join(spans), "cross-reference text was dropped"
+
+
+def test_article_number_on_its_own_line_survives_page_number_stripping():
+    # The CBD prints headings as "Article" / number / title on three lines.
+    # A lone number is exactly what the page-number stripper removes, so it
+    # deleted every article number in that document -- 43 headings in the raw
+    # text became 1 after cleaning, and the convention fell through to
+    # section chunking with 40,000-character chunks.
+    from chunking import _clean_page_text
+    page = "Article \n1\noBjeCtives\nThe objectives of this Convention are as follows.\n"
+    assert "1" in _clean_page_text(page).split("Article")[1][:6]
+
+
+def test_bare_page_number_line_is_still_stripped():
+    # The exception above must stay narrow: a running-footer page number with
+    # no "Article" before it is still apparatus, not structure.
+    from chunking import _clean_page_text
+    page = "Some ordinary treaty text ends here.\n7\nMore text continues on the next page.\n"
+    assert "\n7\n" not in _clean_page_text(page)
+
+
+def test_wide_article_style_is_opt_in_only():
+    # Widening the shared article pattern for everyone regressed Madrid and
+    # PCT, so the wide layouts are reachable only by declaring the style.
+    from chunking import ARTICLE_HEADING_RE, ARTICLE_HEADING_WIDE_RE
+    inline = "Article 1: Abbreviated Expressions\n"
+    assert ARTICLE_HEADING_WIDE_RE.search(inline) is not None
+    assert ARTICLE_HEADING_RE.search(inline) is None
+
+
+def test_monotonic_articles_drops_a_table_of_contents_restart():
+    from chunking import _monotonic_articles
+    import re as _re
+    class M:
+        def __init__(self, n): self._n = n
+        def group(self, i): return self._n
+    kept = _monotonic_articles([M("1"), M("2"), M("3"), M("1"), M("2")])
+    assert [m.group(1) for m in kept] == ["1", "2", "3"]
