@@ -42,6 +42,39 @@ const SCOPE_META = {
 };
 const isScope = (v) => Object.prototype.hasOwnProperty.call(SCOPE_META, v);
 
+/* Confidence, as the pipeline reports it. Three states, no fourth: an
+   unrecognised value means "we don't know what this is", which renders no
+   advisory at all rather than a guessed label (see normalizeAdvisory).
+   `filled` is how many of the three meter segments light up — the count, not
+   the colour, is what carries the state, so it survives greyscale and
+   colour-blindness. */
+const CONFIDENCE_META = {
+  high: { label: "High", filled: 3 },
+  moderate: { label: "Moderate", filled: 2 },
+  low: { label: "Low", filled: 1 },
+};
+const isConfidence = (v) => Object.prototype.hasOwnProperty.call(CONFIDENCE_META, v);
+
+/* Readable names for the regime keys routing.py emits. Same convention as
+   KNOWN_MODEL_NAMES below: a known key gets the phrasing a lawyer would use,
+   an unknown one gets a readable de-slugged fallback rather than a wrong
+   label or a raw "drug-regulatory" leaking onto the screen. */
+const REGIME_LABELS = {
+  patent: "Patent law",
+  trademark: "Trade mark law",
+  gi: "Geographical indications",
+  design: "Industrial designs",
+  copyright: "Copyright",
+  "plant-variety": "Plant varieties and farmers' rights",
+  "trade-secret": "Trade secrets and confidential information",
+  abs: "Access and benefit-sharing",
+  tk: "Traditional-knowledge protection",
+  "drug-regulatory": "Drug regulation and licensing",
+  "food-cosmetic": "Food and cosmetic regulation",
+};
+const regimeLabel = (r) =>
+  REGIME_LABELS[r] || String(r).replace(/[-_]+/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+
 let conversations = loadStore();
 let scope = loadScope();
 let activeId = null;
@@ -231,6 +264,164 @@ function coverageHTML(res) {
     </div>`;
 }
 
+/* ───────── advisory (commentary ABOUT an answer) ─────────
+   The terminal `advisory` event — disclaimer, confidence, escalation offer,
+   out-of-coverage regimes, TKDL pointer. Deliberately rendered as its own
+   block BELOW the answer and never inside it: none of it is a verified claim
+   drawn from a passage, and styling it like one would be the exact
+   misrepresentation this tool exists to avoid. Nothing here is wired to JS
+   behaviour (the escalation panel is a native <details>, the contacts are
+   plain links), so a replayed thread renders identically to a live one. */
+
+// Anything that isn't a well-formed advisory becomes null, and null renders
+// nothing at all. A conversation stored before this event existed has no
+// meta.advisory and lands here too — same convention as paintScopeTag and
+// coverageHTML: silence rather than a label that was never actually emitted.
+function normalizeAdvisory(ev) {
+  if (!ev || typeof ev !== "object" || !isConfidence(ev.confidence)) return null;
+
+  const strList = (v) =>
+    Array.isArray(v) ? v.filter((s) => typeof s === "string" && s.trim()) : [];
+
+  const g = ev.escalation_guidance;
+  const guidance = g && typeof g === "object" ? {
+    summary: typeof g.summary === "string" ? g.summary : "",
+    contacts: (Array.isArray(g.contacts) ? g.contacts : [])
+      .filter((c) => c && typeof c === "object")
+      .map((c) => ({ who: String(c.who ?? ""), when: String(c.when ?? ""), where: String(c.where ?? "") }))
+      .filter((c) => c.who),
+  } : null;
+
+  const p = ev.prior_art_pointer;
+  const pointer = p && typeof p === "object" && typeof p.pointer === "string" && p.pointer.trim()
+    // Defaults to "not searchable" on anything other than an explicit true:
+    // the failure that matters here is claiming a TKDL search happened.
+    ? { pointer: p.pointer, searchable_by_this_tool: p.searchable_by_this_tool === true }
+    : null;
+
+  return {
+    disclaimer: typeof ev.disclaimer === "string" ? ev.disclaimer : "",
+    confidence: ev.confidence,
+    escalate: ev.escalate === true,
+    escalation_reasons: strList(ev.escalation_reasons),
+    escalation_guidance: guidance,
+    regimes_out_of_coverage: strList(ev.regimes_out_of_coverage),
+    prior_art_pointer: pointer,
+  };
+}
+
+// A contact's `where` is rendered as a link only if it really is an http(s)
+// URL; anything else prints as text. The advisory comes from our own backend,
+// but a link is the one thing on this block a user will click without reading.
+function safeUrl(u) {
+  try {
+    const p = new URL(String(u), location.href);
+    return p.protocol === "https:" || p.protocol === "http:" ? p.href : null;
+  } catch { return null; }
+}
+
+function confidenceHTML(adv) {
+  const meta = CONFIDENCE_META[adv.confidence];
+  const segs = [0, 1, 2].map((i) => `<i${i < meta.filled ? ' class="on"' : ""}></i>`).join("");
+  return `
+    <div class="advisory-top">
+      <span class="conf conf-${adv.confidence}">
+        <span class="sr-only">Confidence in this answer — </span>
+        <span class="conf-key">Confidence</span>
+        <span class="conf-meter" aria-hidden="true">${segs}</span>
+        <span class="conf-val">${meta.label}</span>
+      </span>
+      <p class="conf-note">How closely the retrieved passages matched the question — not a judgement that the answer is right.</p>
+    </div>`;
+}
+
+// Out of coverage = a body of law this case touches and this corpus has no
+// source for. Full block with a heading, not a footnote: the user is being
+// told that part of their question is unanswered here, which is materially
+// different from the answer being incomplete.
+function outOfCoverageHTML(regimes) {
+  if (!regimes.length) return "";
+  return `
+    <div class="no-coverage">
+      <h4>This question also touches law this tool has no sources for</h4>
+      <ul class="regime-list">
+        ${regimes.map((r) => `<li>${esc(regimeLabel(r))}</li>`).join("")}
+      </ul>
+      <p>Nothing above is drawn from ${regimes.length === 1 ? "it" : "them"}. Treat that part of the question as unanswered here, not as settled.</p>
+    </div>`;
+}
+
+// Rendered in full, never clamped or summarised: the pointer's whole point is
+// the sentence at the end about fabricated TKDL record numbers.
+function priorArtHTML(p) {
+  if (!p) return "";
+  return `
+    <div class="prior-art">
+      <p class="prior-art-key">
+        <span>Traditional-knowledge prior art</span>
+        ${p.searchable_by_this_tool ? "" : `<span class="prior-art-flag">not searchable by this tool</span>`}
+      </p>
+      <p class="prior-art-text">${esc(p.pointer)}</p>
+    </div>`;
+}
+
+// Collapsed by default. It is an offer, not a warning — it should be findable
+// on the answers that warrant it without shouting on any of them.
+function escalationHTML(adv) {
+  if (!adv.escalate) return "";
+  const reasons = adv.escalation_reasons;
+  const guidance = adv.escalation_guidance;
+  if (!reasons.length && !guidance) return "";
+  const contacts = guidance?.contacts || [];
+  return `
+    <details class="acc acc-escalate">
+      <summary><span class="caret">›</span> Worth putting to a person${reasons.length ? ` — ${reasons.length} reason${reasons.length === 1 ? "" : "s"}` : ""}</summary>
+      ${guidance?.summary ? `<p class="escalate-lede">${esc(guidance.summary)}</p>` : ""}
+      ${reasons.length ? `
+        <p class="escalate-key">Why this came up</p>
+        <ul class="escalate-why">${reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
+      ${contacts.length ? `
+        <p class="escalate-key">Who to ask</p>
+        <div class="contacts">
+          ${contacts.map((c) => {
+            const href = safeUrl(c.where);
+            return `
+            <div class="contact">
+              <p class="contact-who">${esc(c.who)}</p>
+              ${c.when ? `<p class="contact-when">${esc(c.when)}</p>` : ""}
+              ${c.where ? (href
+                ? `<a class="contact-where" href="${esc(href)}" target="_blank" rel="noopener">${esc(c.where)}</a>`
+                : `<p class="contact-where-plain">${esc(c.where)}</p>`) : ""}
+            </div>`;
+          }).join("")}
+        </div>` : ""}
+    </details>`;
+}
+
+function advisoryHTML(adv) {
+  if (!adv) return "";
+  return `
+    <section class="advisory" aria-label="About this answer">
+      ${confidenceHTML(adv)}
+      ${outOfCoverageHTML(adv.regimes_out_of_coverage)}
+      ${priorArtHTML(adv.prior_art_pointer)}
+      ${escalationHTML(adv)}
+      ${adv.disclaimer ? `<p class="advisory-disclaimer">${esc(adv.disclaimer)}</p>` : ""}
+    </section>`;
+}
+
+// Always lands immediately above the action buttons, wherever it arrives from
+// — the advisory event precedes `complete` on an answer but follows `refused`
+// on both refusal paths, so this is called both before and after the answer
+// itself has been painted.
+function renderAdvisory(body, adv) {
+  const html = advisoryHTML(adv);
+  if (!html || $(".advisory", body)) return;
+  const actions = $(".msg-actions", body);
+  if (actions) actions.insertAdjacentHTML("beforebegin", html);
+  else body.insertAdjacentHTML("beforeend", html);
+}
+
 function sourcesHTML(sources) {
   if (!sources.length) return "";
   return `
@@ -367,6 +558,7 @@ function replayAssistant(res, meta = {}) {
       <span class="scope-tag" data-scope-tag hidden></span>
     </div>
     ${answerHTML(res)}
+    ${advisoryHTML(normalizeAdvisory(meta.advisory))}
     ${actionsHTML()}`;
   paintScopeTag($("[data-scope-tag]", body), meta.scope);
   wireAnswer(body, res);
@@ -377,6 +569,10 @@ function replayAssistant(res, meta = {}) {
 
 function ask(question) {
   if (busy) return;
+  // A previous run's stream can still be open here — a refusal holds it for a
+  // beat waiting on its advisory (see closeStream) — and an EventSource left
+  // dangling would reconnect and re-run that old question.
+  if (stream) { stream.close(); stream = null; }
   busy = true;
   sendBtn.disabled = true;
   empty.hidden = true;
@@ -416,6 +612,13 @@ function ask(question) {
 
   let drafted = 0;
   let sources = [];
+  // The advisory is terminal but its position relative to the terminal event
+  // differs by path: BEFORE `complete` on a successful answer, AFTER
+  // `refused` on both refusal paths. Rather than depend on that ordering,
+  // whichever arrives second paints/records what the first one left pending.
+  let advisory = null;
+  let pushedTurn = null;
+  let closeTimer = null;
 
   // Last few turns of THIS conversation, sent so a follow-up ("what about
   // for Unani?") can be rewritten into a standalone question before
@@ -431,9 +634,14 @@ function ask(question) {
   // API treats an absent (or unrecognised) value as "no filter", so omitting
   // it is the literal request, not a shorthand for one.
   const scopeParam = askScope === "all" ? "" : `&jurisdiction=${encodeURIComponent(askScope)}`;
-  stream = new EventSource(`/api/ask?q=${encodeURIComponent(question)}${historyParam}${scopeParam}`);
+  // Captured locally as well as globally: a refusal now leaves this stream
+  // open for a beat (see finish/closeStream below) while the advisory that
+  // follows it arrives, so the close has to target THIS EventSource even if
+  // another question has started in the meantime.
+  const es = new EventSource(`/api/ask?q=${encodeURIComponent(question)}${historyParam}${scopeParam}`);
+  stream = es;
 
-  stream.onmessage = (m) => {
+  es.onmessage = (m) => {
     const ev = JSON.parse(m.data);
 
     if (ev.type === "stage" && ev.stage === "condense" && ev.status === "done") {
@@ -485,6 +693,24 @@ function ask(question) {
     }
 
     if (ev.type === "sources") sources = ev.sources;
+
+    if (ev.type === "advisory") {
+      advisory = normalizeAdvisory(ev);
+      // Arrived after the answer was already painted (the refusal paths):
+      // append it now and amend the record already written to localStorage,
+      // so a reload of this same thread shows what the live run showed.
+      if (pushedTurn) {
+        if (advisory) {
+          renderAdvisory(body, advisory);
+          pushedTurn.meta.advisory = advisory;
+          saveStore();
+          toBottom();
+        }
+        // Nothing further is coming on this stream, and leaving it open would
+        // let EventSource re-open it and silently re-run the question.
+        closeStream();
+      }
+    }
 
     if (ev.type === "stage" && ev.stage === "generation" && ev.status === "start") {
       setStep("generation", "active");
@@ -576,12 +802,19 @@ function ask(question) {
       $(".vs-text", sumBtn).textContent = summary;
       setTimeout(() => verify.classList.add("collapsed"), 900);
 
-      body.insertAdjacentHTML("beforeend", answerHTML(res) + actionsHTML());
+      body.insertAdjacentHTML("beforeend",
+        answerHTML(res) + advisoryHTML(advisory) + actionsHTML());
       wireAnswer(body, res);
-      conv.turns.push({ q: question, result: res, meta: { summary, scope: askScope } });
+      pushedTurn = { q: question, result: res, meta: { summary, scope: askScope, advisory } };
+      conv.turns.push(pushedTurn);
       conv.at = Date.now();
       saveStore();
-      finish();
+      // A refusal is not the last event on the wire: the advisory follows it,
+      // and closing here would drop the disclaimer and the escalation offer
+      // on exactly the answers that need them most. The composer is released
+      // now either way; only the socket waits, and only briefly.
+      finish({ keepStream: ev.type === "refused" });
+      if (ev.type === "refused") closeTimer = setTimeout(closeStream, 4000);
       toBottom();
     }
 
@@ -616,12 +849,25 @@ function ask(question) {
     }
   };
 
-  stream.onerror = () => { if (busy) { clearInterval(timer); finish(); } };
+  // Also the path taken when the server closes the connection normally after
+  // the last event: closing unconditionally here is what stops EventSource
+  // from reconnecting and re-running the question behind the user's back.
+  es.onerror = () => {
+    clearInterval(timer);
+    if (busy) finish();
+    else closeStream();
+  };
 
-  function finish() {
+  function closeStream() {
+    if (closeTimer) { clearTimeout(closeTimer); closeTimer = null; }
+    es.close();
+    if (stream === es) stream = null;
+  }
+
+  function finish({ keepStream = false } = {}) {
     busy = false;
     sendBtn.disabled = false;
-    if (stream) { stream.close(); stream = null; }
+    if (!keepStream) closeStream();
   }
 }
 

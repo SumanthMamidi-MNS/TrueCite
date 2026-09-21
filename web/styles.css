@@ -473,6 +473,117 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 }
 .coverage-note strong { color: var(--amber); font-weight: 600; }
 
+/* ══════════ advisory ══════════ */
+
+/* Commentary ABOUT an answer — disclaimer, confidence, escalation offer,
+   out-of-coverage regimes, TKDL pointer — never part of the answer itself.
+   Separated from it by a rule and set a size down, so nothing in here can be
+   read as one of the verified claims above. It carries no card background of
+   its own; the blocks inside it are what earn emphasis. */
+.advisory {
+  margin-top: 1rem; padding-top: .85rem; border-top: 1px solid var(--line);
+  display: grid; gap: .7rem;
+  animation: riseIn .4s var(--ease) both;
+}
+
+/* Confidence. Deliberately NOT the shape or colour of the "Verified" pill:
+   that pill is green, round and mono, and states a measured fact about
+   Layer 2. This is a rectangular meter in the gold/amber accent range and
+   says how well the passages matched — a weaker, different claim. Filled
+   segment COUNT carries the state, so the three levels stay distinguishable
+   with no colour perception at all. */
+.advisory-top { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .75rem; }
+.conf {
+  display: inline-flex; align-items: center; gap: .5rem; flex: none;
+  padding: .26rem .6rem; border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong); background: rgba(255,255,255,.025);
+  font-family: var(--font-mono); font-size: .72rem; color: var(--text-dim);
+}
+.conf-key { font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; color: var(--text-mute); }
+.conf-meter { display: inline-flex; gap: 2px; }
+.conf-meter i { width: 11px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.1); }
+.conf-val { font-weight: 500; letter-spacing: .04em; }
+.conf-high { border-color: rgba(224,163,85,.32); }
+.conf-high .conf-meter i.on { background: var(--gold-400); }
+.conf-high .conf-val { color: var(--gold-400); }
+.conf-moderate .conf-meter i.on { background: var(--gold-600); }
+.conf-moderate .conf-val { color: var(--gold-500); }
+.conf-low { border-color: rgba(240,179,78,.32); background: var(--amber-dim); }
+.conf-low .conf-meter i.on { background: var(--amber); }
+.conf-low .conf-val { color: var(--amber); }
+.conf-note { flex: 1 1 16rem; font-size: .74rem; color: var(--text-mute); line-height: 1.5; }
+
+/* Out-of-coverage regimes. Amber, the same register the app already uses for
+   "we can't stand behind this" (refusal, coverage-note), but a bordered
+   heading block rather than the refusal's filled icon card — it qualifies an
+   answer, it isn't a second refusal. */
+.no-coverage {
+  padding: .7rem .9rem; border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: rgba(240,179,78,.06); border-left: 2px solid rgba(240,179,78,.5);
+}
+.no-coverage h4 {
+  margin: 0; font-family: var(--font-display); font-size: .95rem; font-weight: 600;
+  color: var(--amber); line-height: 1.4;
+}
+.no-coverage p { margin-top: .45rem; font-size: .82rem; color: var(--text-dim); line-height: 1.55; }
+.regime-list { list-style: none; margin: .5rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: .35rem; }
+.regime-list li {
+  font-family: var(--font-mono); font-size: .68rem; padding: .14rem .45rem; border-radius: 4px;
+  color: var(--amber); background: rgba(240,179,78,.1); border: 1px solid rgba(240,179,78,.28);
+}
+
+/* TKDL pointer. Neutral, full text, never clamped — the sentence about
+   fabricated record numbers is the part that matters most. */
+.prior-art {
+  padding: .7rem .9rem; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: rgba(255,255,255,.018);
+}
+.prior-art-key {
+  display: flex; align-items: center; flex-wrap: wrap; gap: .45rem;
+  font-family: var(--font-mono); font-size: .62rem; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--text-mute);
+}
+.prior-art-flag {
+  color: var(--amber); background: var(--amber-dim);
+  border: 1px solid rgba(240,179,78,.28); border-radius: 4px; padding: .05rem .34rem;
+  letter-spacing: .08em;
+}
+.prior-art-text { margin-top: .45rem; font-size: .8rem; color: var(--text-dim); line-height: 1.6; }
+
+/* Escalation. Reuses the sources/discarded accordion wholesale so it reads as
+   one more thing you can open, not an alert. */
+.acc-escalate > summary { color: var(--text-dim); }
+.acc-escalate > summary:hover { color: var(--gold-400); }
+.escalate-lede { margin-top: .4rem; font-size: .85rem; color: var(--text); }
+.escalate-key {
+  margin-top: .7rem; font-size: .62rem; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--text-mute);
+}
+.escalate-why { margin: .35rem 0 0; padding-left: 1.05rem; display: grid; gap: .3rem; }
+.escalate-why li { font-size: .82rem; color: var(--text-dim); line-height: 1.55; }
+.contacts { margin-top: .4rem; display: grid; gap: .4rem; }
+.contact {
+  padding: .6rem .75rem; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: rgba(255,255,255,.02);
+}
+.contact-who { font-size: .84rem; font-weight: 500; }
+.contact-when { margin-top: .2rem; font-size: .78rem; color: var(--text-mute); line-height: 1.5; }
+.contact-where, .contact-where-plain {
+  display: inline-block; margin-top: .35rem;
+  font-family: var(--font-mono); font-size: .71rem;
+}
+.contact-where { color: var(--gold-400); text-decoration: underline; text-underline-offset: 3px; }
+.contact-where:hover { color: var(--gold-500); }
+.contact-where-plain { color: var(--text-mute); }
+
+/* The standing disclaimer, on every answer including refusals. Quiet by
+   design and never dismissible — it is the last thing under the answer, in
+   the same muted register as the composer's tool-level note. */
+.advisory-disclaimer {
+  padding-left: .7rem; border-left: 2px solid var(--line-strong);
+  font-size: .76rem; color: var(--text-mute); line-height: 1.55;
+}
+
 /* message actions */
 .msg-actions { margin-top: .8rem; display: flex; gap: .4rem; }
 .act-btn {

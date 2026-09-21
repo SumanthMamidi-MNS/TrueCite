@@ -38,6 +38,20 @@ same order, every time; nothing here has a planner, decides its own next
 action, or calls tools dynamically. That rigidity is what makes the pipeline
 auditable and what makes "verified" a claim that actually means something.
 
+On top of that engine sits the domain itself: an **India / international
+jurisdiction switch** that keeps the two answer-sets from being conflated, a
+**formulation-classification flow** that asks the minimum questions needed to
+place a product in one of six regulatory categories, **routing across IP
+types**, and an **ABS / traditional-knowledge** path. All of it is
+deterministic where the decision is deterministic — a decision tree, not a
+model, wherever the regulatory test has a crisp answer.
+
+Every answer ends with an advisory: a confidence label derived from the
+measured retrieval distance (not from asking a model how sure it is), the
+standing "information, not legal advice" disclaimer, any regime the case
+touches that the corpus has **no** source for, and an offer to escalate to a
+named human body when the pipeline observed a reason to.
+
 <img src="docs/assets/app_01_landing.png" alt="TrueCite's landing screen — suggested questions, corpus and model status in the sidebar" width="720">
 
 Every reply shows its own work while it runs, then collapses to one line:
@@ -45,6 +59,40 @@ Every reply shows its own work while it runs, then collapses to one line:
 <img src="docs/assets/app_03_verified.png" alt="A verified answer — collapsed to one badge, with its citation and consulted sources beneath" width="720">
 
 ## Results
+
+**Domain regimes, end to end.** Twelve questions spanning every regime added to
+the corpus, plus two controls that must refuse — a suite where everything is
+answerable cannot detect a system that has stopped refusing.
+
+| | Result |
+|---|---|
+| Answered | 9 of 11 attempted |
+| Cited the expected document | 8 of 9 answered |
+| Correct refusals (controls) | **2 of 2** |
+| **False answers** | **0** |
+
+Three caveats stated rather than smoothed over. One question failed on an
+infrastructure error (the local model returned a 500) and is excluded rather
+than counted as a refusal. The single citation "miss" cited the **Biological
+Diversity (Amendment) Act 2023 §6** where the expected answer was the 2002 Act
+— the Amendment amends that very provision, so the ground truth was too narrow,
+not the citation wrong. And results vary run to run: one regime refused in an
+earlier run and answered in this one, so a single number here is an
+observation, not a guarantee.
+
+The two genuine declines both refused at claim-verification rather than
+retrieval: the right statute *was* found, and verification then rejected every
+drafted claim. That is over-refusal — the same weakness measured before the
+corpus grew, which is the more useful result, because it shows quadrupling the
+corpus did not introduce hallucination.
+
+**Retrieval, measured separately.** 13 of 14 regimes return the expected
+statute ranked first. Cross-lingual: a Hindi question and its English twin both
+reach the expected source **10 out of 10 times** at the window the pipeline
+actually uses.
+
+### Earlier measurement (pre-expansion, 7-document corpus)
+
 
 Measured across 96 question-runs (3 question sets × 3 seeded runs each,
 worst-case number reported, not best): a dev set used to find and fix bugs,
@@ -67,27 +115,44 @@ questions). Full methodology and per-question diagnosis: `docs/decisions.md`.
 
 ## Known limitations
 
-- **Over-refusal, not hallucination**, is the dominant failure mode — see
-  "Results" above.
-- **Layer 2 has twice rejected a claim that was, on a plain reading, true**
-  (over-strictness rather than a false accept) — both instances quoted in
-  `docs/decisions.md`.
-- **Generation and verification quality is capped by whichever model is
-  configured.** The running app names the active model in its sidebar and
-  "Known limitations" panel, so this is never stale regardless of which
-  provider is actually deployed.
-- **A relevance-filter stage is built and tested but off by default** — the
-  A/B measurement that justified leaving it off was later found to be
-  confounded by an unrelated bug, so its actual effect is honestly
-  unmeasured, not confirmed negative.
-- **A provider quota/rate-limit or connection failure degrades gracefully**
-  — a distinct, honest "server's busy" message, never a raw error or a
-  fabricated answer. See `docs/decisions.md` for the fallback behavior.
+Measured, not guessed. Each is recorded with its evidence in `docs/`.
+
+- **Over-refusal, not hallucination**, remains the dominant failure mode — 0
+  false answers across every evaluation run, but three of twelve regime
+  questions were declined despite the right statute being retrieved.
+- **Four of the five Indian IP Acts in the corpus are as-originally-enacted
+  text**, with later amendments not folded in. Verified by counting amendment
+  footnotes: zero in the Trade Marks, GI, Designs and Plant Varieties files,
+  against 174 in the Copyright Act, which *is* consolidated. Concretely, the
+  Trade Marks copy still describes the Appellate Board, abolished in 2021.
+  Every document states its own currency, so a stale text announces itself
+  rather than being cited as current.
+- **Three of the six formulation categories cannot be answered at all** — new
+  drug, phytopharmaceutical and cosmetic are defined by the Drugs and Cosmetics
+  Act and its Rules, which could not be sourced in an indexable form. The
+  system abstains and names the instrument to read instead, rather than
+  reaching for a loosely-related passage. (It was caught doing exactly that:
+  a cosmetic query matched the Biological Diversity Act, which merely uses the
+  word.)
+- **The advertising regime is uncovered.** The only reachable copy of the Drugs
+  and Magic Remedies Act 1954 was a departmental extract rather than the Act,
+  and was rejected.
+- **Generation and verification quality is capped by the configured model.**
+  The running app names the active one.
+- **Questions travel in the URL query string**, because server-sent events
+  require GET, so any component logging URLs records them. Stated rather than
+  glossed; see `src/privacy.py`.
+- **A relevance-filter stage is built but off by default** — the A/B that
+  justified that was later found confounded, so its effect is honestly
+  unmeasured rather than confirmed negative.
 
 ## Tech stack
 
-Hybrid retrieval (BAAI/bge-m3 vector search + BM25 keyword search, fused
-with Reciprocal Rank Fusion) over a structured, section-aware chunker built
+A corpus of **20 primary legal instruments** (1,966 chunks) — Indian IP,
+biodiversity, and food statutes plus the international treaties — each tagged
+with its jurisdiction, the regimes it governs, and how current its text is.
+Hybrid retrieval (BAAI/bge-m3 vector search + BM25 keyword search, fused with
+Reciprocal Rank Fusion) over a structured, section-aware chunker built
 for legal documents (not fixed-token splitting). Generation and Layer 2
 verification run on a local Ollama model by default, swappable to Gemini or
 Anthropic with one environment variable (`LLM_PROVIDER`).

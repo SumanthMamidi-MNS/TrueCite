@@ -584,13 +584,26 @@ this points *to* the resource and never claims to have searched it.
 **Gate:** documented and tested; scoped to what a single-user assistant
 genuinely handles, not theatre.
 
-## Phase 18 — Full evaluation
+## Phase 18 — Full evaluation — DONE
 
-- [ ] Extend the eval set across the new regimes and the classification flow.
-- [ ] Measure answer accuracy, citation correctness, safe abstention and
-      multilingual quality; hold out a set before running it, as in Phase 9.
+- [x] Eval extended across all twelve new regimes plus two must-refuse
+      controls (`src/run_phase18.py`, results in
+      `corpus/eval_results/phase18_results.json`).
+- [x] Measured: 9 of 11 attempted answered, 8 of 9 answered cited the expected
+      document, 2/2 correct refusals, **0 false answers**. One question failed
+      on an infrastructure error (local model 500) and is excluded rather than
+      counted as a refusal.
+- [x] Multilingual measured separately: Hindi 10/10, English 10/10 at the
+      pipeline's own retrieval window.
 
-**Gate:** numbers exist and are written down.
+**Gate — met.** Numbers exist and are written down, including the
+uncomfortable ones. Three caveats recorded rather than smoothed: the single
+citation "miss" cited the Biological Diversity (Amendment) Act 2023 §6 where
+the expected answer was the 2002 Act it amends — the ground truth was too
+narrow, not the citation wrong; results vary run to run (one regime refused in
+an earlier run and answered in the final one); and both genuine declines
+refused at Layer 2 verification rather than retrieval, the same over-refusal
+measured since Phase 9.
 
 ## Notes
 - No fixed calendar — move to the next phase only when the current one is verified working.

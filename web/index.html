@@ -151,7 +151,16 @@
         </button>
       </form>
       <p class="hint">Enter to send · Shift+Enter for a new line</p>
-      <p class="disclaimer">Guidance tool, not legal advice — verify against the primary source before acting.</p>
+      <!-- Tool-level standing note. Kept, but no longer the "verify against
+           the primary source" sentence: that sentence is now the pipeline's
+           own disclaimer, stamped on every individual answer and refusal (see
+           .advisory-disclaimer), and printing it twice on one screen would
+           make both easier to tune out. This line says the thing the
+           per-answer disclaimer doesn't — that a person, not a better answer,
+           is the alternative — and it is what covers the states that emit no
+           advisory at all: the empty screen, a pipeline error, and a
+           provider-unavailable message. -->
+      <p class="disclaimer">A guidance tool, not a substitute for a registered practitioner — every answer carries its own disclaimer and confidence.</p>
     </div>
   </main>
 </div>
