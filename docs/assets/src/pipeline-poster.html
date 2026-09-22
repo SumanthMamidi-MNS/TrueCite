@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>TrueCite pipeline</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Spectral:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap');
 
   :root{
     --paper:#F0EEE6; --panel:#FFFFFF; --ink:#1C2530; --ink-soft:#4A545B; --ink-faint:#737D83;
@@ -17,12 +17,12 @@
   *{ box-sizing:border-box; }
   html,body{ margin:0; padding:0; }
   body{ width:1600px; background:var(--paper); color:var(--ink);
-        font-family:'IBM Plex Sans',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
-  .sheet{ padding:58px 64px 50px; }
+        font-family:'Inter',system-ui,sans-serif; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  .sheet{ padding:60px 112px 54px; }
 
   header{ text-align:center; padding-bottom:26px; border-bottom:3px solid var(--ink); margin-bottom:32px; }
-  h1{ font-family:'Spectral',Georgia,serif; font-weight:800; font-size:96px; line-height:1; letter-spacing:.01em; margin:0 0 14px; }
-  .dek{ font-size:30px; color:var(--ink-soft); margin:0; font-weight:500; }
+  h1{ font-family:'Fraunces',Georgia,serif; font-optical-sizing:auto; font-variation-settings:'opsz' 144; font-weight:700; font-size:104px; line-height:1; letter-spacing:.005em; margin:0 0 16px; }
+  .dek{ font-family:'Fraunces',Georgia,serif; font-optical-sizing:auto; font-variation-settings:'opsz' 28; font-style:italic; font-size:29px; color:var(--ink-soft); margin:0; font-weight:500; }
 
   /* Two columns: the flow, and what branches off it. Every box row is
      followed by an arrow row, so side boxes sit exactly level with the
@@ -32,7 +32,7 @@
   .side{ grid-column:2; display:flex; align-items:center; }
 
   .box{ border-radius:16px; border:2px solid; padding:16px 30px; text-align:center; }
-  .box .t{ font-size:31px; font-weight:700; line-height:1.15; }
+  .box .t{ font-family:'Fraunces',Georgia,serif; font-optical-sizing:auto; font-variation-settings:'opsz' 40; font-size:32px; font-weight:600; line-height:1.16; letter-spacing:-.003em; }
   .box .d{ font-size:21.5px; line-height:1.38; color:var(--ink-soft); margin-top:7px; }
   .box .d b{ color:var(--ink); }
 
@@ -47,7 +47,7 @@
   .dash   { background:var(--panel); border-color:var(--sage-line); border-style:dashed; }
   .dash .t{ color:var(--sage); }
   .final  { background:var(--ink); border-color:var(--ink); }
-  .final .t{ color:#fff; font-size:32px; }
+  .final .t{ font-family:'Fraunces',Georgia,serif; font-optical-sizing:auto; font-variation-settings:'opsz' 40; color:#fff; font-size:33px; font-weight:600; }
   .final .d{ color:#C9D0D4; }
 
   .chips{ display:flex; justify-content:center; gap:12px; margin-top:13px; flex-wrap:wrap; }
@@ -58,7 +58,7 @@
 
   .pair{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:13px; }
   .pair > div{ background:var(--panel); border:1.5px solid var(--indigo-line); border-radius:11px; padding:10px 12px; }
-  .pair .pt{ font-size:23px; font-weight:700; color:var(--indigo); }
+  .pair .pt{ font-family:'Fraunces',Georgia,serif; font-optical-sizing:auto; font-variation-settings:'opsz' 28; font-size:23px; font-weight:600; color:var(--indigo); }
   .pair .pd{ font-size:18.5px; color:var(--ink-soft); margin-top:2px; }
 
   /* vertical arrow */
@@ -74,15 +74,15 @@
   .branch span{ position:absolute; left:14px; top:-32px; font-family:'IBM Plex Mono',monospace;
                 font-size:19px; font-weight:700; color:var(--rust); }
   .stop{ flex:1; background:var(--rust-soft); border:2px solid var(--rust-line); border-radius:16px; padding:16px 22px; }
-  .stop .t{ font-size:27px; font-weight:700; color:var(--rust); }
+  .stop .t{ font-family:'Fraunces',Georgia,serif; font-optical-sizing:auto; font-variation-settings:'opsz' 32; font-size:27px; font-weight:600; color:var(--rust); }
   .stop .d{ font-size:19.5px; line-height:1.38; color:var(--ink-soft); margin-top:5px; }
 
   /* results panel */
   .results{ margin-left:58px; flex:1; align-self:stretch; background:var(--panel); border:2px solid var(--line-strong);
             border-radius:16px; padding:22px 26px; display:flex; flex-direction:column; justify-content:space-between; }
-  .results h3{ margin:0 0 12px; font-size:27px; font-weight:700; padding-bottom:10px; border-bottom:1.5px solid var(--line); }
+  .results h3{ font-family:'Fraunces',Georgia,serif; font-optical-sizing:auto; font-variation-settings:'opsz' 32; margin:0 0 12px; font-size:27px; font-weight:600; padding-bottom:10px; border-bottom:1.5px solid var(--line); }
   .r{ display:flex; align-items:center; gap:16px; padding:6px 0; }
-  .r .n{ font-family:'Spectral',Georgia,serif; font-weight:800; font-size:46px; line-height:1; color:var(--sage); min-width:124px; }
+  .r .n{ font-family:'Fraunces',Georgia,serif; font-optical-sizing:auto; font-variation-settings:'opsz' 60; font-weight:700; font-size:46px; line-height:1; color:var(--sage); min-width:124px; }
   .r .l{ font-size:19.5px; line-height:1.3; color:var(--ink-soft); }
   .r .l b{ color:var(--ink); }
 
