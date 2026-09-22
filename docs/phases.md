@@ -610,3 +610,11 @@ measured since Phase 9.
 - Known limitation carried forward from Phase 1: TKDL itself isn't public (restricted to
   patent offices under NDA); WIPO's public TK toolkit stands in, tagged at a lower
   authority level. Document this in the Phase 7 README.
+
+## Status — 2026-09-22
+
+All phases 1-18 complete. Remaining work is corpus, not code: an indexable
+Drugs and Cosmetics Act (unlocks three formulation categories), consolidated
+texts for the four as-enacted IP Acts, an authentic Drugs and Magic Remedies
+Act, and Bhashini credentials for that leg of multilingual delivery.
+
