@@ -307,7 +307,50 @@ function normalizeAdvisory(ev) {
     escalation_guidance: guidance,
     regimes_out_of_coverage: strList(ev.regimes_out_of_coverage),
     prior_art_pointer: pointer,
+    related_law: normalizeRelated(ev.related_law),
   };
+}
+
+// Knowledge-graph links for what the answer cited. Missing or malformed
+// (including every conversation stored before this existed) becomes empty,
+// which renders nothing.
+function normalizeRelated(r) {
+  const out = { instruments: [], provisions: [] };
+  if (!r || typeof r !== "object") return out;
+  out.instruments = (Array.isArray(r.instruments) ? r.instruments : [])
+    .filter((i) => i && typeof i.name === "string" && typeof i.relation === "string")
+    .map((i) => ({ from_name: String(i.from_name ?? ""), relation: i.relation, name: i.name,
+                   jurisdiction: String(i.jurisdiction ?? ""), note: String(i.note ?? "") }));
+  out.provisions = (Array.isArray(r.provisions) ? r.provisions : [])
+    .filter((p) => p && Array.isArray(p.refers_to) && p.refers_to.length)
+    .map((p) => ({ citation: String(p.citation ?? ""),
+                   refers_to: p.refers_to.filter((x) => x && x.section)
+                     .map((x) => ({ section: String(x.section), heading: String(x.heading ?? ""),
+                                    name: String(x.name ?? "") })) }));
+  return out;
+}
+
+function relatedHTML(rel) {
+  if (!rel) return "";
+  const n = rel.instruments.length + rel.provisions.reduce((a, p) => a + p.refers_to.length, 0);
+  if (!n) return "";
+  const inst = rel.instruments.length ? `
+      <p class="escalate-key">Linked instruments</p>
+      <ul class="escalate-why related-list">${rel.instruments.map((i) => `
+        <li><span class="related-from">${esc(i.from_name)}</span> ${esc(i.relation)}
+          <b>${esc(i.name)}</b>${i.jurisdiction === "international" ? ` <span class="related-tag">international</span>` : ""}
+          ${i.note ? `<span class="related-note">${esc(i.note)}</span>` : ""}</li>`).join("")}
+      </ul>` : "";
+  const prov = rel.provisions.length ? `
+      <p class="escalate-key">Provisions the cited text refers to</p>
+      <ul class="escalate-why related-list">${rel.provisions.map((p) => p.refers_to.map((x) => `
+        <li><b>§${esc(x.section)}</b>${x.name ? ` <span class="related-from">of ${esc(x.name)}</span>` : ""} — ${esc(x.heading)}</li>`).join("")).join("")}
+      </ul>` : "";
+  return `
+    <details class="acc acc-related">
+      <summary>Related law — ${n} link${n === 1 ? "" : "s"}</summary>
+      ${inst}${prov}
+    </details>`;
 }
 
 // A contact's `where` is rendered as a link only if it really is an http(s)
@@ -405,6 +448,7 @@ function advisoryHTML(adv) {
       ${confidenceHTML(adv)}
       ${outOfCoverageHTML(adv.regimes_out_of_coverage)}
       ${priorArtHTML(adv.prior_art_pointer)}
+      ${relatedHTML(adv.related_law)}
       ${escalationHTML(adv)}
       ${adv.disclaimer ? `<p class="advisory-disclaimer">${esc(adv.disclaimer)}</p>` : ""}
     </section>`;

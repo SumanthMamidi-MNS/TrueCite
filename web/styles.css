@@ -755,3 +755,16 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
     animation: none !important; opacity: 1; transform: none;
   }
 }
+
+/* Related law — knowledge-graph links under an answer. Reuses the escalation
+   panel's key/list styles so the two collapsible panels read as one family. */
+.acc-related > summary { color: var(--text-dim); }
+.acc-related > summary:hover { color: var(--gold-400); }
+.related-list li { line-height: 1.6; }
+.related-list b { color: var(--text); font-weight: 600; }
+.related-from { color: var(--text-dim); }
+.related-note { display: block; font-size: .78rem; color: var(--text-mute); margin-top: .1rem; }
+.related-tag { font-family: var(--mono, "IBM Plex Mono", monospace); font-size: .68rem; letter-spacing: .04em;
+               text-transform: uppercase; color: var(--text-mute); border: 1px solid var(--line, rgba(255,255,255,.12));
+               border-radius: 4px; padding: 0 .3rem; margin-left: .25rem; }
+

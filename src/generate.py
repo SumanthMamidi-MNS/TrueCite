@@ -35,6 +35,7 @@ from citation import format_citation, resolve_authority
 from confidence_gate import CONFIDENCE_THRESHOLD, passes_confidence_gate
 from coverage import assess_coverage
 from hybrid_retrieval import _in_jurisdiction, retrieve_hybrid
+from knowledge_graph import related_instruments, section_references
 from routing import prior_art_pointer, route
 from relevance import apply_relevance, judge_relevance
 from retrieval import retrieve as retrieve_vector
@@ -290,7 +291,8 @@ def _describe_source(hit: dict, index: int) -> dict:
 
 
 def _advisory_event(query: str, *, refused: bool, best_distance: float | None,
-                    rejected_claims: int = 0) -> dict:
+                    rejected_claims: int = 0, claims: list[dict] | None = None,
+                    jurisdiction: str | None = None) -> dict:
     """Everything the pipeline can say ABOUT an answer, as one terminal event.
 
     Kept out of the answer text deliberately. The disclaimer, the confidence
@@ -317,6 +319,22 @@ def _advisory_event(query: str, *, refused: bool, best_distance: float | None,
         "regimes_in_coverage": [e["regime"] for e in routed["in_coverage"]],
         "regimes_out_of_coverage": out_of_coverage,
         "prior_art_pointer": prior_art_pointer(query),
+        "related_law": _related_law(claims or [], jurisdiction),
+    }
+
+
+def _related_law(claims: list[dict], jurisdiction: str | None) -> dict:
+    """Knowledge-graph navigation for the instruments and provisions an answer
+    actually cited. Empty on a refusal — there is nothing cited to relate."""
+    doc_ids = list(dict.fromkeys(c["doc_id"] for c in claims if c.get("doc_id")))
+    provisions = []
+    for c in claims:
+        refs = section_references(c.get("chunk_id", ""))
+        if refs:
+            provisions.append({"citation": c.get("citation"), "refers_to": refs})
+    return {
+        "instruments": related_instruments(doc_ids, jurisdiction),
+        "provisions": provisions,
     }
 
 
@@ -604,6 +622,8 @@ def answer_query_streaming(
         refused=False,
         best_distance=diag.get("best_distance"),
         rejected_claims=len(result.get("discarded") or []),
+        claims=result.get("claims") or [],
+        jurisdiction=jurisdiction,
     )
     yield {"type": "complete", "result": result}
 
