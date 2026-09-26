@@ -117,9 +117,22 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
   background: linear-gradient(145deg, rgba(242,197,124,.16), rgba(224,163,85,.04));
   border: 1px solid rgba(242,197,124,.28);
   margin-bottom: .3rem;
+  animation: splashPulse 2.4s ease-in-out infinite;
+}
+@keyframes splashPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(242,197,124,.28); }
+  50% { box-shadow: 0 0 0 8px rgba(242,197,124,0); }
 }
 .splash-mark svg { width: 30px; height: 30px; stroke: var(--gold-400); stroke-linecap: round; stroke-linejoin: round; }
-.splash-mark .mark-check { stroke: var(--green); stroke-width: 2; }
+.splash-mark .mark-check {
+  stroke: var(--green); stroke-width: 2;
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: checkDraw .65s cubic-bezier(.22,1,.36,1) .2s forwards;
+}
+@keyframes checkDraw {
+  to { stroke-dashoffset: 0; }
+}
 .splash-word { font-family: var(--font-display); font-size: 1.4rem; line-height: 1.15; }
 .splash-word strong { font-weight: 700; color: var(--text); }
 .splash-word span { font-weight: 500; color: var(--text); }

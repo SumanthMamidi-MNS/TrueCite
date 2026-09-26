@@ -176,7 +176,7 @@
            fallback shown before that fetch resolves, or if it fails. Never
            edit the provider-specific facts here without also updating that
            function, or the two will drift. -->
-      <li id="limit-provider"><b>Local model substitution.</b> Verification and generation run on a local Qwen&nbsp;2.5&nbsp;7B via Ollama, not the Claude API this was scoped for. Measured cost: a 5/11 false-refusal rate on answerable evaluation questions.</li>
+      <li id="limit-provider"><b>Local model substitution.</b> Verification and generation run on a local Qwen&nbsp;2.5&nbsp;7B via Ollama, not a cloud API. Measured cost: a 5/11 false-refusal rate on answerable evaluation questions.</li>
       <li><b>Follow-up resolution is best-effort.</b> The last 3 turns are used to rewrite a follow-up (e.g. “what about for Unani?”) into a standalone question before retrieval — shown as an “Understand follow-up” step. The rewrite itself isn't verified the way answers are, so if it misreads what you meant, rephrase the question fully rather than continuing to build on it.</li>
       <li><b>Statutory vocabulary gap.</b> Terse clauses (e.g. Patents Act §3(p), which never uses the word “patent”) rank poorly against natural-language questions, so an answer may come from a secondary source explaining the same rule.</li>
       <li><b>English-only corpus.</b> Hindi retrieval is unverified — no Hindi source documents yet.</li>

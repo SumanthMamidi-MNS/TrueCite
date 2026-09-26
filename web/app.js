@@ -921,7 +921,7 @@ function limitationsProviderText(model, provider) {
     // The 5/11 false-refusal number was measured specifically against this
     // local model (see README's Known limitations) — safe to state as-is
     // only in the case that actually produced it.
-    return `<b>Local model substitution.</b> Verification and generation run on a local ${esc(modelLabel)} via Ollama, not the Claude API this was scoped for. Measured cost: a 5/11 false-refusal rate on answerable evaluation questions.`;
+    return `<b>Local model substitution.</b> Verification and generation run on a local ${esc(modelLabel)} via Ollama, not a cloud API. Measured cost: a 5/11 false-refusal rate on answerable evaluation questions.`;
   }
   // A cloud provider is active: "local model substitution" and the 5/11
   // figure (both specific to the Ollama dev setup) would be false here, so

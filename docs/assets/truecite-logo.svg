@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 116" width="500" height="116" fill="none">
+  <defs>
+    <!-- Radiant Glowing Gold Gradient with User's #FACC15 -->
+    <linearGradient id="tc-gold" x1="14" y1="6" x2="82" y2="90" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FEF08A"/>
+      <stop offset="35%" stop-color="#FACC15"/>
+      <stop offset="70%" stop-color="#EAB308"/>
+      <stop offset="100%" stop-color="#CA8A04"/>
+    </linearGradient>
+
+    <!-- Wordmark Gold Gradient -->
+    <linearGradient id="tc-text-gold" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FEF08A"/>
+      <stop offset="40%" stop-color="#FACC15"/>
+      <stop offset="100%" stop-color="#EAB308"/>
+    </linearGradient>
+
+    <!-- Emerald Verification Gradient for Checkmark -->
+    <linearGradient id="tc-emerald" x1="34" y1="38" x2="64" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#34D399"/>
+      <stop offset="100%" stop-color="#10B981"/>
+    </linearGradient>
+
+    <!-- Enhanced Radiant Vector Aura Gradient (Dissolves completely before edges) -->
+    <radialGradient id="tc-vector-aura" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFFBEB" stop-opacity="0.95"/>
+      <stop offset="25%" stop-color="#FACC15" stop-opacity="0.85"/>
+      <stop offset="50%" stop-color="#EAB308" stop-opacity="0.4"/>
+      <stop offset="75%" stop-color="#CA8A04" stop-opacity="0.1"/>
+      <stop offset="92%" stop-color="#CA8A04" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#CA8A04" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <style>
+    @keyframes tcGrowAndGlow {
+      0%, 100% {
+        opacity: 0.5;
+        transform: scale(0.9);
+      }
+      50% {
+        opacity: 1.0;
+        transform: scale(1.18);
+      }
+    }
+    .animated-aura {
+      transform-origin: 48px 48px;
+      animation: tcGrowAndGlow 2.6s ease-in-out infinite;
+    }
+    .tc-wordmark {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+      font-size: 72px;
+      letter-spacing: -0.8px;
+    }
+    .tc-true {
+      font-weight: 600;
+      fill: #FFFFFF;
+    }
+    .tc-cite {
+      font-weight: 500;
+      fill: url(#tc-text-gold);
+    }
+    @media (prefers-color-scheme: light) {
+      .tc-true {
+        fill: #0F172A;
+      }
+      .tc-cite {
+        fill: #CA8A04;
+      }
+    }
+  </style>
+
+  <!-- Centered Lockup: Sleek Dark-Core Shield (Image 1) + Enacted Size (72px, Refined Weight) -->
+  <g transform="translate(18, 10)">
+    <!-- Shield Container -->
+    <g transform="translate(0, 0)">
+      <!-- Enhanced Glowing & Growing Vector Aura -->
+      <ellipse cx="48" cy="48" rx="58" ry="58" fill="url(#tc-vector-aura)" class="animated-aura"/>
+
+      <!-- Sleek Dark-Core Shield from Image 1 with Radiant Gold Border -->
+      <path d="M48 6 L82 22 V58 C82 78 48 90 48 90 C48 90 14 78 14 58 V22 Z"
+            fill="#111827"
+            stroke="url(#tc-gold)"
+            stroke-width="5"
+            stroke-linejoin="round"/>
+
+      <!-- Inner Subtle Border Highlight -->
+      <path d="M48 9 L79 24 V57 C79 75 48 86 48 86 C48 86 17 75 17 57 V24 Z"
+            fill="none"
+            stroke="#FEF9C3"
+            stroke-width="0.8"
+            stroke-opacity="0.6"/>
+
+      <!-- Layer 2 Claim Verification Checkmark (Vibrant Emerald, Centered) -->
+      <path d="M34 50 L44 60 L64 38"
+            fill="none"
+            stroke="url(#tc-emerald)"
+            stroke-width="5.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"/>
+    </g>
+
+    <!-- Wordmark "TrueCite" (72px font size, refined non-thick weight, vertically centered) -->
+    <text x="114" y="74" class="tc-wordmark">
+      <tspan class="tc-true">True</tspan><tspan class="tc-cite">Cite</tspan>
+    </text>
+  </g>
+</svg>
