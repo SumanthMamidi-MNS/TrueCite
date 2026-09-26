@@ -499,7 +499,12 @@ full result count. The same TK question returns IPO guidelines under India and
 WIPO/PCT material under International. Browser-verified that the control sends
 `&jurisdiction=india` on the wire and that the answer carries its scope label.
 
-## Phase 12 — Formulation classification flow — DONE
+## Phase 12 — Formulation classification flow — PARTIAL (backend only)
+
+- [ ] **Not wired (found 2026-09-26).** `classification.py` is built and tested, but
+      has no API endpoint and no UI, so no user can reach the question flow.
+      Marked DONE on 2026-09-21 in error. Needs: an endpoint for next question /
+      classify / category guidance, and a guided flow in the interface.
 
 - [ ] Minimum-clarifying-question flow resolving a product to one of: classical
       or generic medicine; patent-or-proprietary medicine; new or non-classical
@@ -567,7 +572,11 @@ this points *to* the resource and never claims to have searched it.
 
 **Gate:** per-language numbers written down, not asserted.
 
-## Phase 17 — Privacy, audit and security (DPDP) — DONE
+## Phase 17 — Privacy, audit and security (DPDP) — PARTIAL
+
+- [ ] **Not wired (found 2026-09-26).** `privacy.AUDIT` is defined and tested but the
+      pipeline never records an `AuditRecord`, so there is no audit trail in
+      practice. Marked DONE on 2026-09-21 in error.
 
 - [x] Data minimisation, audit logging, retention and deletion — scoped to what a
       single-user local tool actually handles (`src/privacy.py`). The audit trail
@@ -617,4 +626,16 @@ All phases 1-18 complete. Remaining work is corpus, not code: an indexable
 Drugs and Cosmetics Act (unlocks three formulation categories), consolidated
 texts for the four as-enacted IP Acts, an authentic Drugs and Magic Remedies
 Act, and Bhashini credentials for that leg of multilingual delivery.
+
+## Status correction — 2026-09-26
+
+The 2026-09-22 status said all phases were complete. That was wrong: Phase 12's
+classifier and Phase 17's audit trail exist only as tested backend modules and
+are not reachable by a user. Both are listed above as open.
+
+Against the full problem statement the build is roughly **60% complete**; against
+its own first stage ("a citation-grounded retrieval MVP first") roughly **85%**.
+Not started: deployment, the knowledge-graph and agentic layers, paid-source
+connectors, Bhashini and voice, and pharmacopoeial, registry and case-law
+sources.
 

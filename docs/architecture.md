@@ -1,5 +1,7 @@
 # Architecture — IP-SAKTI Sahayak
 
+Stack-level reference for each half of the system: `docs/backend.md` (modules, API, SSE contract, configuration) and `docs/frontend.md` (screen structure, rendering, storage).
+
 ## Tech stack
 - Language: Python 3.12
 - Framework(s): none yet (CLI scripts only).

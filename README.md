@@ -93,6 +93,24 @@ Twenty primary instruments, 1,966 passages. Every document records its jurisdict
 | Biological Diversity Act 2002 + 2023 Amendment + 2024 Rules | Patent Cooperation Treaty · Madrid Protocol |
 | FSSAI Ayurveda Aahara Regulations 2022 | WIPO GRATK Treaty 2024 · WIPO TK Toolkit |
 
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| **Language** | Python 3.12 |
+| **API server** | FastAPI · Uvicorn · server-sent events for live pipeline streaming |
+| **Vector search** | ChromaDB (embedded, persisted) · BAAI/bge-m3 embeddings via sentence-transformers on PyTorch |
+| **Keyword search** | rank-bm25 (BM25Okapi), fused with vector search by Reciprocal Rank Fusion |
+| **Language models** | Ollama `qwen2.5:7b` (default, local) · Google Gemini · Anthropic Claude — one environment variable switches provider |
+| **Document processing** | pypdf with a structure-aware legal chunker — sections, clauses, treaty articles, schedules |
+| **Frontend** | Plain HTML, CSS and JavaScript — no framework, no build step, zero dependencies |
+| **Typography** | Fraunces · Inter · IBM Plex Mono |
+| **Testing** | pytest — 280 tests, every model call mocked |
+
+Full detail — every module, the SSE event contract, the API, configuration and
+storage — is in [`docs/backend.md`](docs/backend.md) and
+[`docs/frontend.md`](docs/frontend.md).
+
 ## Known limitations
 
 Each is recorded with its evidence in `docs/`.
@@ -102,6 +120,7 @@ Each is recorded with its evidence in `docs/`.
 - **Advertising regime** — The Drugs and Magic Remedies Act is excluded due to the lack of an indexable primary enactment text.
 - **TKDL access** — Traditional Knowledge Digital Library records remain restricted to patent examiners; TrueCite identifies relevant prior-art categories and notes the restriction.
 - **Model inference** — Answer synthesis and claim extraction quality are bounded by the active model provider.
+- **Not yet wired** — The formulation classifier and the decision audit trail are implemented and tested as backend modules but are not yet exposed through the API or the interface.
 
 ## Running it locally
 
