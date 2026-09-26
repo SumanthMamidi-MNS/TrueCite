@@ -639,3 +639,16 @@ Not started: deployment, the knowledge-graph and agentic layers, paid-source
 connectors, Bhashini and voice, and pharmacopoeial, registry and case-law
 sources.
 
+## Status — 2026-09-26 (final)
+
+Owner decision: the formulation classifier, the audit trail and hosted
+deployment are **scoped out**; paid connectors, voice and pharmacopoeia /
+registry / case-law sources are not pursued (cost). An agentic layer was
+declined because the project's defended design is a fixed, auditable sequence.
+
+Added this session: a legal knowledge graph (16 instrument relations, 509
+section references) surfaced as "Related law" under each answer. With that,
+the build is **complete for its agreed scope**. Against the full original
+problem statement it covers roughly two-thirds; the remainder is the
+scoped-out items above.
+

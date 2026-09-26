@@ -166,6 +166,7 @@ pipeline is a fixed sequence, not an agent, and these preserve that.
   Escalation triggers only on observed conditions, so the reason shown is
   never invented after the fact. Also holds the standing "information, not
   legal advice" disclaimer.
+- **`knowledge_graph.py`** — navigation-only legal graph: 16 curated instrument relations and 509 section cross-references, surfaced as `related_law` in the advisory. Never used for retrieval, ranking or verification.
 - **`privacy.py`** — data inventory, a bounded audit trail of pipeline
   DECISIONS (no question or answer text, enforced by test), and retention.
   Names the real exposure: SSE requires GET, so questions ride in the URL

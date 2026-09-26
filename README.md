@@ -8,10 +8,15 @@
 
 <p align="center">
   <a href="https://www.python.org/"><img src="docs/assets/badges/python.svg" alt="Python 3.12" height="30"></a>
-  <a href="https://fastapi.tiangolo.com"><img src="docs/assets/badges/fastapi.svg" alt="FastAPI 0.115+" height="30"></a>
+  <a href="https://fastapi.tiangolo.com"><img src="docs/assets/badges/fastapi.svg" alt="FastAPI 0.141" height="30"></a>
   <a href="https://www.trychroma.com/"><img src="docs/assets/badges/chromadb.svg" alt="ChromaDB Vector DB" height="30"></a>
   <a href="https://huggingface.co/BAAI/bge-m3"><img src="docs/assets/badges/embeddings.svg" alt="BGE-M3" height="30"></a>
-  <a href="tests/"><img src="docs/assets/badges/tests.svg" alt="280 Passing" height="30"></a>
+  <a href="docs/backend.md#request-flow"><img src="docs/assets/badges/bm25.svg" alt="Hybrid search: BM25 + RRF" height="30"></a>
+  <a href="docs/backend.md#configuration"><img src="docs/assets/badges/llm.svg" alt="LLM: Ollama, Gemini, Claude" height="30"></a>
+  <a href="docs/backend.md#request-flow"><img src="docs/assets/badges/lang.svg" alt="Languages: English, Hindi" height="30"></a>
+  <a href="src/knowledge_graph.py"><img src="docs/assets/badges/graph.svg" alt="Knowledge graph" height="30"></a>
+  <a href="tests/"><img src="docs/assets/badges/tests.svg" alt="291 Passing" height="30"></a>
+  <a href="LICENSE"><img src="docs/assets/badges/license.svg" alt="MIT License" height="30"></a>
 </p>
 
 <p align="center">
@@ -39,6 +44,7 @@ A **fixed sequence, not an agent**. Every question runs the same stages in the s
 5. **Generation** — every claim is tied to exactly one passage. No free prose.
 6. **Layer 2, claim verification** — three independent checks ask whether that passage supports that claim; two must agree or the claim is discarded.
 7. **Advisory** — a confidence level derived from the measured match (never from asking a model how sure it is), any area of law the question touches that the corpus does *not* cover, an offer to escalate to a named human body, and a standing "information, not legal advice" note.
+8. **Knowledge graph** — every cited instrument is linked to what amends it, the Rules made under it and the treaty it implements, and every cited provision to the sections it refers to. Navigation only: the graph never changes what is retrieved, ranked or verified.
 
 Around that pipeline sit the domain tools: a **formulation classifier** that asks the fewest questions needed to place a product in one of six regulatory categories, **routing across IP types**, and an **access-and-benefit-sharing / traditional-knowledge** path. Each is a deterministic decision, not a model call, wherever the underlying legal test has a crisp answer.
 
@@ -61,6 +67,13 @@ Around that pipeline sit the domain tools: a **formulation classifier** that ask
 <p align="center">
   <a href="docs/assets/app_03_refusal.png"><img src="docs/assets/app_03_refusal.png" alt="A refusal at the confidence gate, with low confidence and an expanded list of people to ask" width="100%"></a>
   <br><em>A refusal — stopped at Layer 1, with the reason and who to ask instead.</em>
+</p>
+
+---
+
+<p align="center">
+  <a href="docs/assets/app_04_related.png"><img src="docs/assets/app_04_related.png" alt="An answer citing the Biological Diversity (Amendment) Act 2023, with a Related law panel linking it to the 2002 Act it amends and listing the provisions it refers to" width="100%"></a>
+  <br><em>The knowledge graph at work — an answer citing the 2023 Amendment is linked back to the 2002 Act it amends.</em>
 </p>
 
 ---
@@ -103,9 +116,10 @@ Twenty primary instruments, 1,966 passages. Every document records its jurisdict
 | **Keyword search** | rank-bm25 (BM25Okapi), fused with vector search by Reciprocal Rank Fusion |
 | **Language models** | Ollama `qwen2.5:7b` (default, local) · Google Gemini · Anthropic Claude — one environment variable switches provider |
 | **Document processing** | pypdf with a structure-aware legal chunker — sections, clauses, treaty articles, schedules |
+| **Knowledge graph** | 16 curated instrument relations (amends, made under, implements) and 509 resolved section cross-references |
 | **Frontend** | Plain HTML, CSS and JavaScript — no framework, no build step, zero dependencies |
 | **Typography** | Fraunces · Inter · IBM Plex Mono |
-| **Testing** | pytest — 280 tests, every model call mocked |
+| **Testing** | pytest — 291 tests, every model call mocked |
 
 Full detail — every module, the SSE event contract, the API, configuration and
 storage — is in [`docs/backend.md`](docs/backend.md) and
@@ -120,7 +134,7 @@ Each is recorded with its evidence in `docs/`.
 - **Advertising regime** — The Drugs and Magic Remedies Act is excluded due to the lack of an indexable primary enactment text.
 - **TKDL access** — Traditional Knowledge Digital Library records remain restricted to patent examiners; TrueCite identifies relevant prior-art categories and notes the restriction.
 - **Model inference** — Answer synthesis and claim extraction quality are bounded by the active model provider.
-- **Not yet wired** — The formulation classifier and the decision audit trail are implemented and tested as backend modules but are not yet exposed through the API or the interface.
+- **Out of scope for this build** — A formulation classifier and a decision audit trail exist as tested backend modules but are deliberately not exposed; hosted deployment, paid-source connectors, voice, and pharmacopoeia, registry and case-law sources were not pursued.
 
 ## Running it locally
 
@@ -143,7 +157,7 @@ LLM_PROVIDER=gemini GEMINI_API_KEY=... uvicorn src.api:app --port 8000
 ```
 
 ```bash
-python -m pytest tests/            # 280 tests; model calls are mocked
+python -m pytest tests/            # 291 tests; model calls are mocked
 ```
 
 Rebuilding the corpus from the source PDFs in `corpus/raw/` is only needed

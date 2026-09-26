@@ -10,7 +10,7 @@ anything.
 |---|---|
 | **Stack** | Plain HTML, CSS and JavaScript — no framework, no build step, no bundler |
 | **Dependencies** | None. Zero npm packages; nothing to install |
-| **Files** | `web/index.html` (278 lines), `web/styles.css` (757), `web/app.js` (1,092) |
+| **Files** | `web/index.html` (278 lines), `web/styles.css` (770), `web/app.js` (1,136) |
 | **Served by** | The FastAPI backend — `/` returns `index.html`, `web/` is mounted as static files |
 | **Transport** | Server-sent events (`EventSource`) for the pipeline; `fetch` for config and translation |
 | **Fonts** | Fraunces (display serif), Inter (body), IBM Plex Mono (data, citations) — Google Fonts |
@@ -74,6 +74,9 @@ is busy" message rather than a stack trace.
     in the corpus.
   - **Traditional-knowledge prior art** — a pointer to the TKDL, stating that
     this tool cannot search it.
+  - **Related law** — collapsed by default; knowledge-graph links for what the
+    answer cited: the instruments that amend, implement or are made under it
+    (international ones tagged), and the provisions the cited text refers to.
   - **Worth putting to a person** — collapsed by default; the pipeline's own
     reasons shown verbatim, with named bodies and their links.
   - **Disclaimer** — "information, not legal advice", on every answer and every
@@ -104,7 +107,7 @@ rather than with a guessed value.
 | Conversations | `newConversation`, `ensureConversation`, `renderHistory`, `openConversation`, `replayAssistant` |
 | Asking | `ask`, `submit`, `autoGrow` |
 | Rendering | `attachPipeline`, `answerHTML`, `coverageHTML`, `sourcesHTML`, `discardedHTML`, `actionsHTML`, `wireAnswer` |
-| Advisory | `normalizeAdvisory`, `renderAdvisory`, `confidenceHTML`, `outOfCoverageHTML`, `priorArtHTML`, `escalationHTML`, `safeUrl` |
+| Advisory | `normalizeAdvisory`, `normalizeRelated`, `relatedHTML`, `renderAdvisory`, `confidenceHTML`, `outOfCoverageHTML`, `priorArtHTML`, `escalationHTML`, `safeUrl` |
 | Scope | `paintScopeTag` |
 | Config | `loadModelBadge`, `formatModelName`, `limitationsProviderText` |
 | Translation | `translateAnswer` |
@@ -124,8 +127,7 @@ a partial panel.
 - Honours `prefers-reduced-motion`, including an explicit override for
   staggered animation *delays*, which a duration-only rule misses.
 
-## Not in the frontend yet
+## Not in the frontend
 
-- The **formulation classifier** exists in the backend but has no screen —
-  there is no guided question flow for classifying a product.
+- The formulation classifier has no screen — scoped out of this build.
 - No voice input or output, and no languages beyond English and Hindi.

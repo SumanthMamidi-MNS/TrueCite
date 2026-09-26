@@ -18,7 +18,8 @@ ones pinned in `requirements.txt` and installed in `.venv`.
 | **Validation** | Pydantic 2.13 (request bodies) |
 | **LLM providers** | Ollama (default, local), Google Gemini (`google-genai` 2.23.0), Anthropic (`anthropic` 1.5.0) |
 | **HTTP client** | requests 2.34.2 (Ollama) |
-| **Tests** | pytest 9.1.1 — 280 tests, model calls mocked |
+| **Knowledge graph** | `knowledge_graph.py` — 16 instrument relations, 509 section references |
+| **Tests** | pytest 9.1.1 — 291 tests, model calls mocked |
 | **Database / auth** | None. No user accounts, no server-side storage of questions or answers. |
 
 There is no ORM, no task queue, no cache server and no container. The whole
@@ -69,8 +70,9 @@ server-sent event per stage:
     document registry, never from model output.
 11. **Coverage check** — advisory only: "does this actually answer what was
     asked?" It can attach a note; it can never refuse or edit a claim.
-12. **Advisory** — confidence, routing, escalation and the disclaimer, emitted
-    as one terminal event (see below).
+12. **Advisory** — confidence, routing, escalation, the disclaimer and the
+    knowledge-graph links for what was cited, emitted as one terminal event
+    (see below).
 
 ### SSE event contract
 
@@ -91,7 +93,9 @@ Every event is `data: {json}\n\n`. The frontend depends on these types:
 The **advisory** event: `disclaimer`, `confidence` (`high` / `moderate` /
 `low`), `escalate`, `escalation_reasons` (each tied to something the pipeline
 observed), `escalation_guidance` (named bodies with URLs),
-`regimes_in_coverage`, `regimes_out_of_coverage`, `prior_art_pointer`. It is
+`regimes_in_coverage`, `regimes_out_of_coverage`, `prior_art_pointer`,
+`related_law` (`instruments`: linked Acts with relation, jurisdiction and note;
+`provisions`: the sections each cited provision refers to). It is
 kept out of the answer text deliberately: these are statements *about* the
 answer, not claims from a source, and must never be sent through Layer 2.
 
@@ -130,6 +134,7 @@ answer, not claims from a source, and must never be sent through Layer 2.
 | `authority.py` | Registry of all 20 documents: authority level, effective date, jurisdiction, regimes, amendment currency, source URL |
 | `routing.py` | Which IP regimes a question touches; coverage derived from `authority.py`; ABS/TK triggers; TKDL pointer |
 | `escalation.py` | Confidence label from measured distance; escalation reasons and contacts; standing disclaimer |
+| `knowledge_graph.py` | Legal knowledge graph: curated instrument relations plus section cross-references, jurisdiction-filtered; an amending Act's references resolve against the Act it amends |
 | `classification.py` | Deterministic six-category formulation classifier (see *Wiring status*) |
 | `privacy.py` | Data inventory, retention statement, bounded decision audit trail (see *Wiring status*) |
 
@@ -180,7 +185,7 @@ overwrite duplicates silently.
 ## Testing
 
 ```bash
-python -m pytest tests/        # 280 tests; every model call is mocked
+python -m pytest tests/        # 291 tests; every model call is mocked
 ```
 
 Tests cover chunking regressions (one per real bug found), retrieval and
@@ -189,16 +194,26 @@ provider failure handling, classification, routing, escalation, privacy
 invariants, and the corpus build. End-to-end quality is measured separately by
 the `run_phase*.py` evaluators against the live model.
 
-## Wiring status
+## Knowledge graph
 
-Two modules are implemented and tested but **not yet reachable by a user**:
+`knowledge_graph.py` adds navigation to an answer, never evidence. Two edge
+types, both deterministic:
 
-- **`classification.py`** has no API endpoint and no UI. The decision tree and
-  its structural abstentions work and are tested; nothing calls them.
-- **`privacy.AUDIT`** is defined but never written to. The pipeline does not
-  yet record an `AuditRecord` per question.
+- **Instrument relations** — 16 hand-curated facts: the 2023 Amendment *amends*
+  the 2002 Biological Diversity Act, the 2024 Rules are *made under* it, it
+  *implements* the CBD, the Indian IP Acts *implement* TRIPS, and so on.
+- **Section references** — "section 3 or section 4" inside a provision,
+  resolved with the same regexes `enrichment.py` uses (excluding references to
+  other statutes). 509 references across 251 provisions. An amending Act's
+  numbers resolve against the Act it amends.
 
-Both are listed as open work in `docs/phases.md`.
+With a jurisdiction selected, only instruments on that side are listed.
+
+## Not exposed
+
+`classification.py` (six-category formulation classifier) and `privacy.AUDIT`
+(decision audit trail) are tested modules deliberately left unexposed in this
+build — the owner scoped them out, along with hosted deployment.
 
 ## Security and privacy
 
